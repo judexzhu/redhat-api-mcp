@@ -273,6 +273,30 @@ async def get_case(case_number: str) -> Dict:
         formatted_result["openshiftClusterID"] = data.get("openshiftClusterID")
     if "openshiftClusterVersion" in data:
         formatted_result["openshiftClusterVersion"] = data.get("openshiftClusterVersion")
+    # Add external trackers if present
+    if "externalTrackers" in data and isinstance(data["externalTrackers"], list):
+        formatted_result["external_trackers"] = [
+            {
+                "resourceKey": tracker.get("resourceKey"),
+                "resourceURL": tracker.get("resourceURL"),
+                "status": tracker.get("status"),
+                "system": tracker.get("system"),
+                "title": tracker.get("title"),
+            }
+            for tracker in data["externalTrackers"]
+            if any(tracker.get(k) for k in ("resourceKey", "resourceURL", "status", "system", "title"))
+        ]
+    # Add case resource links if present
+    if "caseResourceLinks" in data and isinstance(data["caseResourceLinks"], list):
+        formatted_result["case_resource_links"] = [
+            {
+                "resourceType": link.get("resourceType"),
+                "resourceViewURI": link.get("resourceViewURI"),
+                "solutionTitle": link.get("solutionTitle"),
+            }
+            for link in data["caseResourceLinks"]
+            if any(link.get(k) for k in ("resourceType", "resourceViewURI", "solutionTitle"))
+        ]
     
     return formatted_result
 
@@ -282,7 +306,7 @@ async def summarize_case(case_number: str) -> str:
     Given a Red Hat support case number, instruct the LLM to fetch the case data and summarize it using the C.A.S.E. markdown template.
     """
     prompt = f'''
-You are a Red Hat support expert. Given the following Red Hat support case number, first fetch the full case data using the appropriate tool or API, then analyze and summarize it using this markdown template. 
+You are a Red Hat support expert. Given the following Red Hat support case number, first fetch the full case data using the appropriate tool or API, then analyze and summarize it using this markdown template into an artifact. 
 Do not use bold, italics, or any markdown except for headings and bullet points. 
 Be concise, actionable, and ensure all sections are filled if possible.
 
