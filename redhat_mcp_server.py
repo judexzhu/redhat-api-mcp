@@ -220,7 +220,7 @@ async def search_cases(query: str, rows: int = 10, start: int = 0) -> List[Dict]
                 "created_date": doc.get("case_createdDate"),
                 "created_by": doc.get("case_createdByName"),
                 "last_modified_date": doc.get("case_lastModifiedDate"),
-                "uri": doc.get("uri")
+                "uri": doc.get("uri"),
             }
             cases.append(case)
     
@@ -258,21 +258,34 @@ async def get_case(case_number: str) -> Dict:
         ]
     }
     
-    # Add any additional useful fields from the original response
-    if "status" in data:
-        formatted_result["status"] = data.get("status")
-    if "product" in data:
-        formatted_result["product"] = data.get("product") 
-    if "version" in data:
-        formatted_result["version"] = data.get("version")
-    if "ownerId" in data:
-        formatted_result["ownerId"] = data.get("ownerId")
-    if "createdDate" in data:
-        formatted_result["createdDate"] = data.get("createdDate")
-    if "openshiftClusterID" in data:
-        formatted_result["openshiftClusterID"] = data.get("openshiftClusterID")
-    if "openshiftClusterVersion" in data:
-        formatted_result["openshiftClusterVersion"] = data.get("openshiftClusterVersion")
+    # Core fields
+    sfdc_id = data.get("id", "")
+    formatted_result["status"] = data.get("status")
+    formatted_result["product"] = data.get("product")
+    formatted_result["version"] = data.get("version")
+    formatted_result["ownerId"] = data.get("ownerId")
+    formatted_result["createdDate"] = data.get("createdDate")
+    formatted_result["lastModifiedDate"] = data.get("lastModifiedDate")
+    formatted_result["openshiftClusterID"] = data.get("openshiftClusterID")
+    formatted_result["openshiftClusterVersion"] = data.get("openshiftClusterVersion")
+    formatted_result["caseNumber"] = data.get("caseNumber")
+    formatted_result["contactName"] = data.get("contactName")
+    formatted_result["accountNumberRef"] = data.get("accountNumberRef")
+    # SFDC
+    formatted_result["sfdc_id"] = sfdc_id
+    formatted_result["sfdc_url"] = f"https://gss--c.vf.force.com/apex/Case_View?id={sfdc_id}&sfdc.override=1" if sfdc_id else None
+    # Operational fields
+    formatted_result["sbt"] = data.get("sbt")
+    formatted_result["internalStatus"] = data.get("internalStatus")
+    formatted_result["sbrGroups"] = data.get("sbrGroups")
+    formatted_result["caseLanguage"] = data.get("caseLanguage")
+    formatted_result["entitlementSla"] = data.get("entitlementSla")
+    formatted_result["customerEscalation"] = data.get("customerEscalation")
+    formatted_result["critSit"] = data.get("critSit")
+    formatted_result["fts"] = data.get("fts")
+    formatted_result["isStrategicAccount"] = data.get("isStrategicAccount")
+    formatted_result["priorityScore"] = data.get("priorityScore")
+    formatted_result["apiTags"] = data.get("apiTags")
     # Add external trackers if present
     if "externalTrackers" in data and isinstance(data["externalTrackers"], list):
         formatted_result["external_trackers"] = [
@@ -299,6 +312,23 @@ async def get_case(case_number: str) -> Dict:
         ]
     
     return formatted_result
+
+@mcp.tool()
+async def get_case_raw(case_number: str) -> Dict:
+    """
+    Get ALL raw fields from a case for debugging/discovery.
+
+    Args:
+        case_number: The case number (e.g., "01234567")
+
+    Returns:
+        The complete unfiltered API response with all available fields
+    """
+    path = f"/hydra/rest/v1/cases/{case_number}"
+    data = await rhapi.make_request("get", path)
+    # Remove comments to keep response size manageable
+    data.pop("comments", None)
+    return data
 
 @mcp.prompt(name="summarize_case_prompt", description="Summarize a Red Hat support case in C.A.S.E. markdown format.")
 async def summarize_case_prompt(case_number: str) -> str:
