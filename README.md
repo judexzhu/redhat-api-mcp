@@ -1,10 +1,10 @@
-# Red Hat API MCP Server
+# Red Hat API MCP Server & CLI
 
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![MCP Compatible](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
 [![UV](https://img.shields.io/badge/package%20manager-uv-blue)](https://docs.astral.sh/uv/)
 
-This project implements a [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that provides tools for interacting with [Red Hat APIs](https://developers.redhat.com/api-catalog/api/case-management), making it easy to integrate with LLM applications.
+This project implements a [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server **and CLI** that provides tools for interacting with [Red Hat APIs](https://developers.redhat.com/api-catalog/api/case-management), making it easy to integrate with LLM applications or use directly from the terminal.
 
 ## Table of Contents
 
@@ -13,11 +13,10 @@ This project implements a [Model Context Protocol (MCP)](https://modelcontextpro
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Usage](#usage)
+- [CLI](#cli)
 - [Available Tools](#available-tools)
-- [Examples](#examples)
-- [Troubleshooting](#troubleshooting)
+- [Claude Code Skill](#claude-code-skill)
 - [Advanced Usage](#advanced-usage)
-- [Contributing](#contributing)
 
 ## Features
 
@@ -44,6 +43,13 @@ git clone <your-repository-url>
 cd redhat-api-mcp
 uv sync
 ```
+
+### 3. Install CLI globally (optional)
+```bash
+uv tool install .
+```
+
+This makes the `rhapi` command available system-wide at `~/.local/bin/rhapi`.
 
 ## Configuration
 
@@ -100,6 +106,34 @@ To install the server in Claude Desktop, add this configuration to your Claude D
 ```
 
 
+## CLI
+
+The `rhapi` CLI exposes the same tools as the MCP server, usable directly from the terminal.
+
+```bash
+# Search cases (query defaults to *:* when using only filters)
+rhapi search-cases --account 12345678 --months 12 --rows 50
+rhapi search-cases "apiserver timeout" --months 6
+
+# Get case details
+rhapi get-case 01234567
+
+# Search KCS articles
+rhapi search-kcs "OCP upgrade" --rows 10
+
+# Get a specific KCS solution
+rhapi get-kcs 1234567
+
+# Table output instead of JSON
+rhapi search-cases --months 3 -o table
+```
+
+If installed locally (without `uv tool install`), prefix with `uv run`:
+
+```bash
+uv run rhapi search-cases --months 6
+```
+
 ## Available Tools
 
 ### search_kcs
@@ -135,13 +169,15 @@ get_kcs(solution_id: str) -> Dict
 Search for Red Hat support cases.
 
 ```python
-search_cases(query: str, rows: int = 10, start: int = 0) -> List[Dict]
+search_cases(query: str, rows: int = 10, start: int = 0, account_number: str = None, created_within_months: int = None) -> List[Dict]
 ```
 
 **Parameters:**
 - `query` (str): Search terms
 - `rows` (int, optional): Number of results to return (default: 10)
 - `start` (int, optional): Starting index for pagination (default: 0)
+- `account_number` (str, optional): Filter by customer EBS account number
+- `created_within_months` (int, optional): Only return cases created within N months
 
 **Returns:** List of case objects with case_number, summary, status, product, etc.
 
@@ -158,6 +194,20 @@ get_case(case_number: str) -> Dict
 
 **Returns:** Detailed case information with summary, description, severity, and comments
 
+
+## Claude Code Skill
+
+A ready-to-use Claude Code skill is included in `skills/rhapi-cli/`. It teaches the agent how to use the `rhapi` CLI for case and KCS lookups.
+
+To install it, copy the skill to your Claude Code commands directory:
+
+```bash
+# Project-level (available in a specific project)
+cp skills/rhapi-cli/SKILL.md /path/to/project/.claude/commands/rhapi.md
+
+# Global (available in all projects)
+cp skills/rhapi-cli/SKILL.md ~/.claude/commands/rhapi.md
+```
 
 ## Advanced Usage
 

@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.13"
 
 [[package]]
@@ -289,11 +289,12 @@ wheels = [
 
 [[package]]
 name = "redhat-api-mcp"
-version = "0.1.0"
-source = { virtual = "." }
+version = "0.3.0"
+source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "bs4" },
+    { name = "click" },
     { name = "httpx" },
     { name = "mcp", extra = ["cli"] },
     { name = "python-dotenv" },
@@ -304,6 +305,7 @@ dependencies = [
 requires-dist = [
     { name = "beautifulsoup4" },
     { name = "bs4", specifier = ">=0.0.2" },
+    { name = "click", specifier = ">=8.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.9.0" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
