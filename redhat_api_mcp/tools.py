@@ -68,34 +68,63 @@ async def get_kcs(solution_id: str) -> Dict:
         Dictionary with title, Environment, Issue, Resolution, and Root Cause
     """
     client = get_client()
-    path = "/hydra/rest/search/v2/kcs"
 
-    data = {
-        "q": f"id:{solution_id}",
-    }
+    # First, determine the document type via search API
+    search_result = await client.make_request("post", "/hydra/rest/search/v2/kcs", {"q": f"id:{solution_id}"})
 
-    result = await client.make_request("post", path, data)
+    doc_kind = None
+    if search_result and "response" in search_result and "docs" in search_result["response"] and search_result["response"]["docs"]:
+        doc = search_result["response"]["docs"][0]
+        doc_kind = doc.get("documentKind", "").lower()
 
-    if not result or "response" not in result or "docs" not in result["response"] or not result["response"]["docs"]:
+    # Fetch full content via Drupal API
+    doc_type = "articles" if doc_kind == "article" else "solutions"
+    try:
+        drupal = await client.make_request("get", f"/hydra/rest/drupal/{doc_type}/{solution_id}")
+    except Exception:
+        drupal = {}
+
+    is_teaser = drupal.get("isTeaser", True)
+
+    def extract_text(field):
+        if isinstance(field, dict):
+            return field.get("text", "")
+        if isinstance(field, list):
+            return field[0] if field else ""
+        return field or ""
+
+    if not is_teaser and drupal:
+        solution_data = {
+            "title": drupal.get("title", ""),
+            "environment": extract_text(drupal.get("environment")),
+            "issue": extract_text(drupal.get("issue")),
+            "resolution": extract_text(drupal.get("resolution")),
+            "root_cause": extract_text(drupal.get("rootCause")),
+            "diagnostic_steps": extract_text(drupal.get("diagnosticSteps")),
+        }
+        if drupal.get("bodyAbstract"):
+            solution_data["abstract"] = extract_text(drupal.get("bodyAbstract"))
+        return solution_data
+
+    # Fallback to search API fields (teaser or articles without full body)
+    if search_result and "response" in search_result and "docs" in search_result["response"] and search_result["response"]["docs"]:
+        doc = search_result["response"]["docs"][0]
         return {
-            "title": "",
-            "environment": "",
-            "issue": "",
-            "resolution": "",
-            "root_cause": "",
+            "title": doc.get("publishedTitle", doc.get("allTitle", "")),
+            "abstract": doc.get("abstract", ""),
+            "environment": doc.get("standard_product", ""),
+            "issue": doc.get("issue", ""),
+            "resolution": doc.get("solution_resolution", ""),
+            "root_cause": doc.get("solution_rootcause", ""),
         }
 
-    doc = result["response"]["docs"][0]
-
-    solution_data = {
-        "title": doc.get("publishedTitle", ""),
-        "environment": doc.get("standard_product", ""),
-        "issue": doc.get("issue", ""),
-        "resolution": doc.get("solution_resolution", ""),
-        "root_cause": doc.get("solution_rootcause", ""),
+    return {
+        "title": "",
+        "environment": "",
+        "issue": "",
+        "resolution": "",
+        "root_cause": "",
     }
-
-    return solution_data
 
 
 async def search_cases(
