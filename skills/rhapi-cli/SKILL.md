@@ -1,18 +1,19 @@
 ---
 name: rhapi
 description: >
-  Use the `rhapi` CLI to search and retrieve Red Hat support cases and KCS
-  articles. Trigger this skill whenever the user asks about Red Hat support
-  cases, customer tickets, case searches, KCS solutions, or wants to look up
-  support information — even if they don't say "rhapi" explicitly. Common
-  triggers include asking about cases for a customer, looking up a case number,
-  searching KCS articles, filtering cases by account or time range, or any
-  request involving Red Hat support data.
+  Use the `rhapi` CLI to search and retrieve Red Hat support cases, KCS
+  articles, and product documentation. Trigger this skill whenever the user
+  asks about Red Hat support cases, customer tickets, case searches, KCS
+  solutions, product docs, or wants to look up support information — even if
+  they don't say "rhapi" explicitly. Common triggers include asking about
+  cases for a customer, looking up a case number, searching KCS articles,
+  finding product documentation, filtering cases by account or time range,
+  or any request involving Red Hat support data.
 ---
 
 # rhapi — Red Hat API CLI
 
-`rhapi` is a globally installed CLI that queries Red Hat's Hydra API for support cases and KCS articles. Requires `RH_API_OFFLINE_TOKEN` in the environment.
+`rhapi` is a globally installed CLI that queries Red Hat's Hydra API for support cases, KCS articles, and product documentation. Requires `RH_API_OFFLINE_TOKEN` in the environment.
 
 ## Commands
 
@@ -58,12 +59,28 @@ rhapi get-kcs SOLUTION_ID
 
 Returns title, environment, issue, resolution, and root cause.
 
+### Search product documentation
+
+```bash
+rhapi search-docs QUERY [OPTIONS]
+```
+
+| Flag | Purpose |
+|------|---------|
+| `QUERY` | Search keywords (required) |
+| `--product` | Filter by product name (e.g. "Red Hat OpenShift Service on AWS") |
+| `--rows` | Results per page (default: 10) |
+| `--start` | Pagination offset (default: 0) |
+
+Searches docs.redhat.com for official product documentation pages. Include version in the query string (e.g. "upgrade 4.18") since the API has no version filter field.
+
 ## Output format
 
-JSON by default. Use `-o table` for human-readable output. The flag goes on any command:
+JSON by default. Use `-o table` for key-value or `-o md` for markdown tables. The flag goes on any command:
 
 ```bash
 rhapi search-cases --months 6 -o table
+rhapi search-cases --months 6 -o md
 ```
 
 ## Pagination

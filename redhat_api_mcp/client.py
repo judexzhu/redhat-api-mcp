@@ -46,7 +46,7 @@ class RedHatAPI:
 
             return self.access_token
 
-    async def make_request(self, method: str, path: str, data: Optional[Dict] = None) -> Dict:
+    async def make_request(self, method: str, path: str, data: Optional[Dict] = None, params: Optional[Dict] = None) -> Dict:
         """Make an authenticated request to the Red Hat API."""
         token = await self.get_access_token()
         headers = {
@@ -58,7 +58,7 @@ class RedHatAPI:
 
         async with httpx.AsyncClient() as client:
             if method.lower() == "get":
-                response = await client.get(url, headers=headers)
+                response = await client.get(url, headers=headers, params=params)
             elif method.lower() == "post":
                 response = await client.post(url, json=data, headers=headers)
             else:

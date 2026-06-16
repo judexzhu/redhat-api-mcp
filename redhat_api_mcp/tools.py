@@ -127,6 +127,50 @@ async def get_kcs(solution_id: str) -> Dict:
     }
 
 
+async def search_docs(query: str, rows: int = 10, start: int = 0, product: Optional[str] = None) -> List[Dict]:
+    """
+    Search Red Hat product documentation (docs.redhat.com).
+
+    Args:
+        query: Search query string
+        rows: Number of results to return (default: 10)
+        start: Starting index for pagination (default: 0)
+        product: Filter by product name (e.g. "Red Hat OpenShift Service on AWS")
+
+    Returns:
+        List of documentation pages with their titles and URLs
+    """
+    client = get_client()
+    fq = [
+        "-documentKind:(PortalProduct OR ContainerVendor OR Packages)",
+        "-id:Other",
+        "language:(en)",
+        '{!tag=documentKindFilter}documentKind:("Documentation")',
+    ]
+    if product:
+        fq.append(f'standard_product:("{product}")')
+    params = {
+        "q": query,
+        "rows": rows,
+        "start": start,
+        "fl": "allTitle,abstract,documentKind,lastModifiedDate,view_uri",
+        "fq": fq,
+    }
+    result = await client.make_request("get", "/hydra/rest/search/platform/docs", params=params)
+
+    docs = []
+    if "response" in result and "docs" in result["response"]:
+        for doc in result["response"]["docs"]:
+            docs.append({
+                "title": doc.get("allTitle"),
+                "abstract": doc.get("abstract"),
+                "url": doc.get("view_uri"),
+                "last_modified": doc.get("lastModifiedDate"),
+            })
+
+    return docs
+
+
 async def search_cases(
     query: str,
     rows: int = 10,

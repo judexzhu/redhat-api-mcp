@@ -10,7 +10,7 @@ import httpx
 
 from redhat_api_mcp import tools
 
-_output_option = click.option("--output", "-o", "fmt", type=click.Choice(["json", "table"]), default="json", help="Output format")
+_output_option = click.option("--output", "-o", "fmt", type=click.Choice(["json", "table", "md"]), default="json", help="Output format")
 
 
 def run_async(coro):
@@ -28,10 +28,42 @@ def run_async(coro):
         sys.exit(3)
 
 
+def _md_table(rows: list[dict]) -> str:
+    if not rows:
+        return ""
+    keys = list(rows[0].keys())
+    header = "| " + " | ".join(keys) + " |"
+    sep = "| " + " | ".join("---" for _ in keys) + " |"
+    lines = [header, sep]
+    for row in rows:
+        cells = [str(row.get(k, "") or "").replace("\n", " ").replace("|", "\\|") for k in keys]
+        lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
+def _md_dict(data: dict) -> str:
+    lines = []
+    for k, v in data.items():
+        if isinstance(v, list) and v and isinstance(v[0], dict):
+            lines.append(f"\n### {k}\n")
+            lines.append(_md_table(v))
+        elif isinstance(v, list):
+            lines.append(f"**{k}:** {', '.join(str(i) for i in v)}")
+        else:
+            val = str(v).replace("\n", "\n> ") if v and "\n" in str(v) else v
+            lines.append(f"**{k}:** {val}")
+    return "\n\n".join(lines)
+
+
 def output(data, fmt="json"):
     """Format and print output."""
     if fmt == "json":
         click.echo(json.dumps(data, indent=2, default=str))
+    elif fmt == "md":
+        if isinstance(data, list):
+            click.echo(_md_table(data))
+        elif isinstance(data, dict):
+            click.echo(_md_dict(data))
     elif fmt == "table":
         if isinstance(data, list):
             for item in data:
@@ -67,14 +99,23 @@ def cli():
       --months INTEGER   Only cases created within N months
       --rows INTEGER     Number of results (default: 10)
       --start INTEGER    Pagination offset (default: 0)
-      -o [json|table]    Output format (default: json)
+      -o [json|table|md] Output format (default: json)
+
+    \b
+    search-docs QUERY [OPTIONS]
+      Search Red Hat product documentation (docs.redhat.com).
+      QUERY is a search string (e.g. "ROSA networking", "ARO upgrade").
+      --product TEXT     Filter by product (e.g. "Red Hat OpenShift Service on AWS")
+      --rows INTEGER     Number of results (default: 10)
+      --start INTEGER    Pagination offset (default: 0)
+      -o [json|table|md] Output format (default: json)
 
     \b
     get-case CASE_NUMBER [OPTIONS]
       Get full case details by case number.
       CASE_NUMBER is an 8-digit string (e.g. 01234567).
       Returns summary, description, severity, status, comments, and linked resources.
-      -o [json|table]    Output format (default: json)
+      -o [json|table|md] Output format (default: json)
 
     \b
     search-kcs QUERY [OPTIONS]
@@ -82,17 +123,17 @@ def cli():
       QUERY is a search string (e.g. "etcd defrag", "OCP upgrade").
       --rows INTEGER     Number of results (default: 10)
       --start INTEGER    Pagination offset (default: 0)
-      -o [json|table]    Output format (default: json)
+      -o [json|table|md] Output format (default: json)
 
     \b
     get-kcs SOLUTION_ID [OPTIONS]
       Get a specific KCS solution by its numeric ID.
       Returns title, environment, issue, resolution, and root cause.
-      -o [json|table]    Output format (default: json)
+      -o [json|table|md] Output format (default: json)
 
     \b
     Output:
-      JSON by default. Use -o table on any command for human-readable output.
+      JSON by default. Use -o table for key-value, -o md for markdown tables.
 
     \b
     Pagination:
@@ -106,6 +147,7 @@ def cli():
       rhapi get-case 01234567
       rhapi search-kcs "etcd defrag" -o table
       rhapi get-kcs 1234567
+      rhapi search-docs "networking" --product "Red Hat OpenShift Service on AWS"
 
     \b
     Tips:
@@ -141,6 +183,22 @@ def get_kcs_cmd(solution_id, fmt):
     Returns title, environment, issue, resolution, and root cause.
     """
     result = run_async(tools.get_kcs(solution_id))
+    output(result, fmt)
+
+
+@cli.command("search-docs")
+@click.argument("query")
+@click.option("--product", default=None, help="Filter by product name")
+@click.option("--rows", default=10, help="Number of results")
+@click.option("--start", default=0, help="Pagination offset")
+@_output_option
+def search_docs_cmd(query, product, rows, start, fmt):
+    """Search Red Hat product documentation (docs.redhat.com).
+
+    \b
+    QUERY is a search string (e.g. "ROSA networking", "ARO upgrade").
+    """
+    result = run_async(tools.search_docs(query, rows, start, product))
     output(result, fmt)
 
 

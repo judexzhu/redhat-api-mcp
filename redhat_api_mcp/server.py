@@ -42,6 +42,23 @@ async def get_kcs(solution_id: str) -> Dict:
 
 
 @mcp.tool()
+async def search_docs(query: str, rows: int = 10, start: int = 0, product: Optional[str] = None) -> List[Dict]:
+    """
+    Search Red Hat product documentation (docs.redhat.com).
+
+    Args:
+        query: Search query string
+        rows: Number of results to return (default: 10)
+        start: Starting index for pagination (default: 0)
+        product: Filter by product name (e.g. "Red Hat OpenShift Service on AWS")
+
+    Returns:
+        List of documentation pages with their titles and URLs
+    """
+    return await tools.search_docs(query, rows, start, product)
+
+
+@mcp.tool()
 async def search_cases(query: str, rows: int = 10, start: int = 0, account_number: Optional[str] = None, created_within_months: Optional[int] = None) -> List[Dict]:
     """
     Search for Red Hat cases and return a list of case numbers.
