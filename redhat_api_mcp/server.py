@@ -77,6 +77,21 @@ async def search_cases(query: str, rows: int = 10, start: int = 0, account_numbe
 
 
 @mcp.tool()
+async def add_comment(case_number: str, body: str) -> Dict:
+    """
+    Add a private comment to a Red Hat support case (always private, never customer-visible).
+
+    Args:
+        case_number: The case number (e.g., "01234567")
+        body: The comment text to post (supports markdown)
+
+    Returns:
+        The created comment (author, body, created timestamp)
+    """
+    return await tools.add_comment(case_number, body)
+
+
+@mcp.tool()
 async def get_case(case_number: str) -> Dict:
     """
     Get case details by case number.

@@ -111,6 +111,13 @@ def cli():
       -o [json|table|md] Output format (default: json)
 
     \b
+    add-comment CASE_NUMBER BODY [OPTIONS]
+      Add a private comment to a support case (always private).
+      CASE_NUMBER is the 8-digit case number.
+      BODY is the comment text in markdown (quote multi-word strings).
+      -o [json|table|md] Output format (default: json)
+
+    \b
     get-case CASE_NUMBER [OPTIONS]
       Get full case details by case number.
       CASE_NUMBER is an 8-digit string (e.g. 01234567).
@@ -148,6 +155,7 @@ def cli():
       rhapi search-kcs "etcd defrag" -o table
       rhapi get-kcs 1234567
       rhapi search-docs "networking" --product "Red Hat OpenShift Service on AWS"
+      rhapi add-comment 01234567 "Investigating the issue"
 
     \b
     Tips:
@@ -231,6 +239,21 @@ def get_case_cmd(case_number, fmt):
     Returns summary, description, severity, status, comments, and linked resources.
     """
     result = run_async(tools.get_case(case_number))
+    output(result, fmt)
+
+
+@cli.command("add-comment")
+@click.argument("case_number")
+@click.argument("body")
+@_output_option
+def add_comment_cmd(case_number, body, fmt):
+    """Add a private comment to a support case (always private).
+
+    \b
+    CASE_NUMBER is the 8-digit case number (e.g. 01234567).
+    BODY is the comment text in markdown (quote multi-word strings).
+    """
+    result = run_async(tools.add_comment(case_number, body))
     output(result, fmt)
 
 

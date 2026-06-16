@@ -39,6 +39,19 @@ rhapi get-case CASE_NUMBER
 
 Returns summary, description, severity, status, product, comments, external trackers, and resource links.
 
+### Add comment to case
+
+```bash
+rhapi add-comment CASE_NUMBER BODY
+```
+
+| Flag | Purpose |
+|------|---------|
+| `CASE_NUMBER` | 8-digit case number (required) |
+| `BODY` | Comment text in markdown (required, quote multi-word) |
+
+Comments are **always private** (internal only, not customer-visible).
+
 ### Search KCS articles
 
 ```bash

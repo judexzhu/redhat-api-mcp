@@ -237,6 +237,30 @@ async def search_cases(
     return cases
 
 
+async def add_comment(case_number: str, body: str) -> Dict:
+    """
+    Add a private comment to a Red Hat support case (always private, never customer-visible).
+
+    Args:
+        case_number: The case number (e.g., "01234567")
+        body: The comment text to post (supports markdown)
+
+    Returns:
+        The created comment (author, body, created timestamp)
+    """
+    client = get_client()
+    path = f"/hydra/rest/v1/cases/{case_number}/comments"
+    data = {"commentBody": body, "isPublic": False}
+    result = await client.make_request("post", path, data)
+    return {
+        "case_number": case_number,
+        "commentBody": result.get("commentBody", ""),
+        "isPublic": result.get("isPublic", False),
+        "createdBy": result.get("createdBy", ""),
+        "createdDate": result.get("createdDate", ""),
+    }
+
+
 async def get_case(case_number: str) -> Dict:
     """
     Get case details by case number.
