@@ -329,3 +329,135 @@ async def get_case(case_number: str) -> Dict:
         ]
 
     return formatted_result
+
+
+async def search_cve(
+    severity: Optional[str] = None,
+    product: Optional[str] = None,
+    package: Optional[str] = None,
+    advisory: Optional[str] = None,
+    cvss3_score: Optional[float] = None,
+    after: Optional[str] = None,
+    before: Optional[str] = None,
+    created_days_ago: Optional[int] = None,
+    per_page: int = 10,
+    page: int = 1,
+) -> List[Dict]:
+    """
+    Search Red Hat CVEs via the Security Data API.
+
+    Args:
+        severity: Filter by severity (low, moderate, important, critical)
+        product: Filter by product (e.g. "openshift")
+        package: Filter by package name (e.g. "kernel", "samba")
+        advisory: Filter by advisory (e.g. "RHSA-2026:13565")
+        cvss3_score: Minimum CVSSv3 score (e.g. 7.0, 9.0)
+        after: Only CVEs published after this date (YYYY-MM-DD)
+        before: Only CVEs published before this date (YYYY-MM-DD)
+        created_days_ago: Only CVEs created within N days
+        per_page: Number of results to return (default: 10)
+        page: Page number for pagination (default: 1)
+
+    Returns:
+        List of CVEs with severity, CVSS score, and advisories
+    """
+    client = get_client()
+    params: Dict = {"per_page": per_page, "page": page}
+    if severity:
+        params["severity"] = severity
+    if product:
+        params["product"] = product
+    if package:
+        params["package"] = package
+    if advisory:
+        params["advisory"] = advisory
+    if cvss3_score is not None:
+        params["cvss3_score"] = cvss3_score
+    if after:
+        params["after"] = after
+    if before:
+        params["before"] = before
+    if created_days_ago is not None:
+        params["created_days_ago"] = created_days_ago
+
+    result = await client.make_request("get", "/hydra/rest/securitydata/cve.json", params=params)
+
+    if isinstance(result, list):
+        return [
+            {
+                "cve": item.get("CVE"),
+                "severity": item.get("severity"),
+                "public_date": item.get("public_date"),
+                "description": item.get("bugzilla_description"),
+                "cvss3_score": item.get("cvss3_score"),
+                "cwe": item.get("CWE"),
+                "advisories": item.get("advisories", []),
+                "url": f"https://access.redhat.com/security/cve/{item.get('CVE')}",
+            }
+            for item in result
+        ]
+    return []
+
+
+async def get_cve(cve_id: str) -> Dict:
+    """
+    Get detailed information about a specific CVE from Red Hat Security Data.
+
+    Args:
+        cve_id: The CVE identifier (e.g., "CVE-2026-31431")
+
+    Returns:
+        Detailed CVE information including severity, CVSS, affected releases, and fix status
+    """
+    client = get_client()
+    result = await client.make_request("get", f"/hydra/rest/securitydata/cve/{cve_id}.json")
+
+    affected = result.get("affected_release", [])
+    if isinstance(affected, list):
+        affected_releases = [
+            {
+                "product": rel.get("product_name"),
+                "advisory": rel.get("advisory"),
+                "package": rel.get("package"),
+                "release_date": rel.get("release_date"),
+            }
+            for rel in affected[:20]
+        ]
+    else:
+        affected_releases = []
+
+    package_state = result.get("package_state", [])
+    if isinstance(package_state, list):
+        fix_state = [
+            {
+                "product": ps.get("product_name"),
+                "fix_state": ps.get("fix_state"),
+                "package": ps.get("package_name"),
+            }
+            for ps in package_state[:20]
+        ]
+    else:
+        fix_state = []
+
+    cvss3 = result.get("cvss3", {})
+    bugzilla = result.get("bugzilla", {})
+    details = result.get("details", [])
+
+    return {
+        "cve": cve_id,
+        "severity": result.get("threat_severity"),
+        "public_date": result.get("public_date"),
+        "cvss3_score": cvss3.get("cvss3_base_score") if isinstance(cvss3, dict) else None,
+        "cvss3_vector": cvss3.get("cvss3_scoring_vector") if isinstance(cvss3, dict) else None,
+        "cwe": result.get("cwe"),
+        "description": details[0] if details else "",
+        "statement": result.get("statement"),
+        "bugzilla_id": bugzilla.get("id") if isinstance(bugzilla, dict) else None,
+        "bugzilla_url": bugzilla.get("url") if isinstance(bugzilla, dict) else None,
+        "mitigation": result["mitigation"].get("value") if isinstance(result.get("mitigation"), dict) else result.get("mitigation"),
+        "upstream_fix": result.get("upstream_fix"),
+        "references": [url for ref in result.get("references", []) for url in ref.split("\n") if url.strip()],
+        "affected_releases": affected_releases,
+        "package_state": fix_state,
+        "url": f"https://access.redhat.com/security/cve/{cve_id}",
+    }

@@ -105,6 +105,54 @@ async def get_case(case_number: str) -> Dict:
     return await tools.get_case(case_number)
 
 
+@mcp.tool()
+async def search_cve(
+    severity: Optional[str] = None,
+    product: Optional[str] = None,
+    package: Optional[str] = None,
+    advisory: Optional[str] = None,
+    cvss3_score: Optional[float] = None,
+    after: Optional[str] = None,
+    before: Optional[str] = None,
+    created_days_ago: Optional[int] = None,
+    per_page: int = 10,
+    page: int = 1,
+) -> List[Dict]:
+    """
+    Search Red Hat CVEs via the Security Data API.
+
+    Args:
+        severity: Filter by severity (low, moderate, important, critical)
+        product: Filter by product (e.g. "openshift")
+        package: Filter by package name (e.g. "kernel", "samba")
+        advisory: Filter by advisory (e.g. "RHSA-2026:13565")
+        cvss3_score: Minimum CVSSv3 score (e.g. 7.0, 9.0)
+        after: Only CVEs published after this date (YYYY-MM-DD)
+        before: Only CVEs published before this date (YYYY-MM-DD)
+        created_days_ago: Only CVEs created within N days
+        per_page: Number of results to return (default: 10)
+        page: Page number for pagination (default: 1)
+
+    Returns:
+        List of CVEs with severity, CVSS score, and advisories
+    """
+    return await tools.search_cve(severity, product, package, advisory, cvss3_score, after, before, created_days_ago, per_page, page)
+
+
+@mcp.tool()
+async def get_cve(cve_id: str) -> Dict:
+    """
+    Get detailed information about a specific CVE from Red Hat Security Data.
+
+    Args:
+        cve_id: The CVE identifier (e.g., "CVE-2026-31431")
+
+    Returns:
+        Detailed CVE information including severity, CVSS, affected releases, and fix status
+    """
+    return await tools.get_cve(cve_id)
+
+
 # ── Prompt templates ────────────────────────────────────────────────
 
 

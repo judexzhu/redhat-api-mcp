@@ -87,6 +87,33 @@ rhapi search-docs QUERY [OPTIONS]
 
 Searches docs.redhat.com for official product documentation pages. Include version in the query string (e.g. "upgrade 4.18") since the API has no version filter field.
 
+### Search CVEs
+
+```bash
+rhapi search-cve [OPTIONS]
+```
+
+| Flag | Purpose |
+|------|---------|
+| `--severity` | Filter: low, moderate, important, critical |
+| `--product` | Filter by product (e.g. "openshift") |
+| `--package` | Filter by package (e.g. "kernel", "samba") |
+| `--advisory` | Filter by advisory (e.g. "RHSA-2026:13565") |
+| `--cvss3-score` | Minimum CVSSv3 score (e.g. 7.0, 9.0) |
+| `--after` | Only CVEs after date (YYYY-MM-DD) |
+| `--before` | Only CVEs before date (YYYY-MM-DD) |
+| `--created-days-ago` | Only CVEs created within N days |
+| `--per-page` | Results per page (default: 10) |
+| `--page` | Page number (default: 1) |
+
+### Get CVE details
+
+```bash
+rhapi get-cve CVE_ID
+```
+
+Returns severity, CVSS score/vector, affected releases, fix status, mitigation, upstream fix, references, bugzilla link, and statement.
+
 ## Output format
 
 JSON by default. Use `-o table` for key-value or `-o md` for markdown tables. The flag goes on any command:

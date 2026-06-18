@@ -87,7 +87,7 @@ def output(data, fmt="json"):
 def cli():
     """rhapi - Red Hat API command-line tools.
 
-    Query Red Hat's Hydra API for support cases and KCS articles.
+    Query Red Hat's Hydra API for support cases, KCS articles, docs, and CVEs.
     Requires RH_API_OFFLINE_TOKEN in the environment.
 
     \b
@@ -139,6 +139,29 @@ def cli():
       -o [json|table|md] Output format (default: json)
 
     \b
+    search-cve [OPTIONS]
+      Search Red Hat CVEs via the Security Data API.
+      --severity TEXT         Filter: low, moderate, important, critical
+      --product TEXT          Filter by product (e.g. "openshift")
+      --package TEXT          Filter by package (e.g. "kernel", "samba")
+      --advisory TEXT         Filter by advisory (e.g. "RHSA-2026:13565")
+      --cvss3-score FLOAT    Minimum CVSSv3 score (e.g. 7.0, 9.0)
+      --after DATE            Only CVEs after this date (YYYY-MM-DD)
+      --before DATE           Only CVEs before this date (YYYY-MM-DD)
+      --created-days-ago INT  Only CVEs created within N days
+      --per-page INT          Number of results (default: 10)
+      --page INT              Page number (default: 1)
+      -o [json|table|md]      Output format (default: json)
+
+    \b
+    get-cve CVE_ID [OPTIONS]
+      Get detailed CVE information from Red Hat Security Data.
+      CVE_ID is the CVE identifier (e.g. CVE-2026-31431).
+      Returns severity, CVSS, affected releases, fix status, mitigation,
+      upstream fix, references, and advisories.
+      -o [json|table|md] Output format (default: json)
+
+    \b
     Output:
       JSON by default. Use -o table for key-value, -o md for markdown tables.
 
@@ -156,6 +179,8 @@ def cli():
       rhapi get-kcs 1234567
       rhapi search-docs "networking" --product "Red Hat OpenShift Service on AWS"
       rhapi add-comment 01234567 "Investigating the issue"
+      rhapi search-cve --severity critical --after 2026-01-01
+      rhapi get-cve CVE-2026-31431
 
     \b
     Tips:
@@ -254,6 +279,42 @@ def add_comment_cmd(case_number, body, fmt):
     BODY is the comment text in markdown (quote multi-word strings).
     """
     result = run_async(tools.add_comment(case_number, body))
+    output(result, fmt)
+
+
+@cli.command("search-cve")
+@click.option("--severity", default=None, help="Filter: low, moderate, important, critical")
+@click.option("--product", default=None, help="Filter by product")
+@click.option("--package", default=None, help="Filter by package name")
+@click.option("--advisory", default=None, help="Filter by advisory (e.g. RHSA-2026:13565)")
+@click.option("--cvss3-score", default=None, type=float, help="Minimum CVSSv3 score")
+@click.option("--after", default=None, help="Only CVEs after this date (YYYY-MM-DD)")
+@click.option("--before", default=None, help="Only CVEs before this date (YYYY-MM-DD)")
+@click.option("--created-days-ago", default=None, type=int, help="Only CVEs created within N days")
+@click.option("--per-page", default=10, help="Number of results")
+@click.option("--page", default=1, help="Page number")
+@_output_option
+def search_cve_cmd(severity, product, package, advisory, cvss3_score, after, before, created_days_ago, per_page, page, fmt):
+    """Search Red Hat CVEs via the Security Data API.
+
+    \b
+    At least one filter is recommended. Without filters, returns recent CVEs.
+    """
+    result = run_async(tools.search_cve(severity, product, package, advisory, cvss3_score, after, before, created_days_ago, per_page, page))
+    output(result, fmt)
+
+
+@cli.command("get-cve")
+@click.argument("cve_id")
+@_output_option
+def get_cve_cmd(cve_id, fmt):
+    """Get detailed CVE information from Red Hat Security Data.
+
+    \b
+    CVE_ID is the CVE identifier (e.g. CVE-2026-31431).
+    Returns severity, CVSS, affected releases, fix status, mitigation, and references.
+    """
+    result = run_async(tools.get_cve(cve_id))
     output(result, fmt)
 
 
