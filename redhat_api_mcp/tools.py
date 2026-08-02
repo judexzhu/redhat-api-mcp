@@ -1,5 +1,7 @@
+import os
 import urllib.parse
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional, List, Dict
 
 from bs4 import BeautifulSoup
@@ -470,6 +472,225 @@ async def get_cve(cve_id: str) -> Dict:
     }
 
 
+async def search_errata(
+    advisory: Optional[str] = None,
+    cve: Optional[str] = None,
+    severity: Optional[str] = None,
+    package: Optional[str] = None,
+    after: Optional[str] = None,
+    before: Optional[str] = None,
+    created_days_ago: Optional[int] = None,
+    per_page: int = 10,
+    page: int = 1,
+) -> List[Dict]:
+    """
+    Search Red Hat errata/advisories via the CSAF Security Data API.
+
+    Args:
+        advisory: Comma-separated advisory IDs (e.g. "RHSA-2026:46885,RHSA-2026:47388")
+        cve: Comma-separated CVE IDs to find advisories for
+        severity: Filter by severity (low, moderate, important, critical)
+        package: Filter by package name (e.g. "kernel")
+        after: Only advisories after this date (YYYY-MM-DD)
+        before: Only advisories before this date (YYYY-MM-DD)
+        created_days_ago: Only advisories created within N days
+        per_page: Number of results to return (default: 10)
+        page: Page number for pagination (default: 1)
+
+    Returns:
+        List of advisories with ID, title, severity, and release date
+    """
+    client = get_client()
+    params: Dict = {"per_page": per_page, "page": page}
+    if advisory:
+        params["rhsa_ids"] = advisory
+    if cve:
+        params["cve"] = cve
+    if severity:
+        params["severity"] = severity
+    if package:
+        params["package"] = package
+    if after:
+        params["after"] = after
+    if before:
+        params["before"] = before
+    if created_days_ago is not None:
+        params["created_days_ago"] = created_days_ago
+
+    result = await client.make_request("get", "/hydra/rest/securitydata/csaf.json", params=params)
+
+    if isinstance(result, list):
+        return [
+            {
+                "advisory_id": item.get("RHSA"),
+                "severity": item.get("severity"),
+                "released_on": item.get("released_on"),
+                "title": item.get("title", ""),
+                "cves": item.get("CVEs", []),
+                "url": f"https://access.redhat.com/errata/{item.get('RHSA')}",
+            }
+            for item in result
+        ]
+    return []
+
+
+async def get_errata(advisory_id: str) -> Dict:
+    """
+    Get detailed information about a specific Red Hat advisory (RHSA/RHBA/RHEA).
+
+    Args:
+        advisory_id: The advisory identifier (e.g. "RHSA-2026:46885")
+
+    Returns:
+        Detailed advisory information including severity, CVEs, affected products, and references
+    """
+    client = get_client()
+    result = await client.make_request("get", f"/hydra/rest/securitydata/csaf/{advisory_id}.json")
+
+    doc = result.get("document", {})
+    vulns = result.get("vulnerabilities", [])
+
+    tracking = doc.get("tracking", {})
+    notes = doc.get("notes", [])
+    description = ""
+    for note in notes:
+        if isinstance(note, dict) and note.get("category") == "description":
+            description = note.get("text", "")
+            break
+
+    cves = [v.get("cve") for v in vulns if v.get("cve")]
+
+    references = []
+    for ref in doc.get("references", []):
+        if isinstance(ref, dict) and ref.get("url"):
+            references.append(ref["url"])
+
+    return {
+        "advisory_id": advisory_id,
+        "title": doc.get("title", ""),
+        "severity": doc.get("aggregate_severity", {}).get("text", ""),
+        "release_date": tracking.get("current_release_date", ""),
+        "status": tracking.get("status", ""),
+        "description": description,
+        "cves": cves,
+        "cve_count": len(cves),
+        "references": references,
+        "url": f"https://access.redhat.com/errata/{advisory_id}",
+    }
+
+
+_ATTACHMENTS_API = "https://api.access.redhat.com/support/v1/cases"
+
+
+async def list_attachments(case_number: str) -> List[Dict]:
+    """
+    List attachments on a Red Hat support case.
+
+    Args:
+        case_number: The case number (e.g., "01234567")
+
+    Returns:
+        List of attachments with filename, size, creator, and UUID for downloading
+    """
+    client = get_client()
+    url = f"{_ATTACHMENTS_API}/{case_number}/attachments"
+    result = await client.get_authenticated(url)
+
+    if isinstance(result, list):
+        return [
+            {
+                "uuid": att.get("uuid"),
+                "filename": att.get("fileName"),
+                "size_kb": att.get("sizeKB"),
+            }
+            for att in result
+        ]
+    return []
+
+
+async def get_attachment(case_number: str, attachment_uuid: str) -> Dict:
+    """
+    Download a case attachment to /tmp for reading.
+
+    Args:
+        case_number: The case number (e.g., "01234567")
+        attachment_uuid: The attachment UUID (from list_attachments)
+
+    Returns:
+        Dictionary with filename, path on disk, and size in bytes
+    """
+    client = get_client()
+
+    attachments = await list_attachments(case_number)
+    att = next((a for a in attachments if a["uuid"] == attachment_uuid), None)
+    if not att:
+        raise ValueError(f"Attachment {attachment_uuid} not found on case {case_number}")
+
+    filename = att["filename"] or attachment_uuid
+    download_dir = Path("/tmp/rhapi-attachments") / case_number
+    download_dir.mkdir(parents=True, exist_ok=True)
+    dest = download_dir / filename
+
+    url = f"{_ATTACHMENTS_API}/{case_number}/attachments/{attachment_uuid}"
+    content = await client.download(url)
+    dest.write_bytes(content)
+
+    return {
+        "filename": filename,
+        "path": str(dest),
+        "size_bytes": len(content),
+    }
+
+
+def _html_to_markdown(element) -> str:
+    """Convert an HTML element to lightweight markdown."""
+    parts = []
+    for child in element.children:
+        if isinstance(child, str):
+            text = child.strip()
+            if text:
+                parts.append(text)
+            continue
+        tag = child.name
+        if tag is None:
+            continue
+        if tag in ("script", "style"):
+            continue
+        if tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
+            level = int(tag[1])
+            text = child.get_text(strip=True)
+            if text:
+                parts.append(f"\n{'#' * level} {text}\n")
+        elif tag == "pre":
+            code = child.get_text()
+            parts.append(f"\n```\n{code.strip()}\n```\n")
+        elif tag == "code" and child.parent and child.parent.name != "pre":
+            parts.append(f"`{child.get_text(strip=True)}`")
+        elif tag in ("ul", "ol"):
+            for li in child.find_all("li", recursive=False):
+                text = li.get_text(strip=True)
+                if text:
+                    parts.append(f"- {text}")
+        elif tag == "table":
+            rows = child.find_all("tr")
+            for i, row in enumerate(rows):
+                cells = [c.get_text(strip=True) for c in row.find_all(["th", "td"])]
+                parts.append("| " + " | ".join(cells) + " |")
+                if i == 0:
+                    parts.append("| " + " | ".join("---" for _ in cells) + " |")
+        elif tag == "p":
+            text = child.get_text(strip=True)
+            if text:
+                parts.append(text)
+        elif tag in ("div", "section", "article", "blockquote"):
+            parts.append(_html_to_markdown(child))
+        else:
+            text = child.get_text(strip=True)
+            if text:
+                parts.append(text)
+    return "\n".join(parts)
+
+
 async def get_doc(url: str) -> Dict:
     """
     Fetch full content from a Red Hat documentation page (docs.redhat.com).
@@ -490,6 +711,16 @@ async def get_doc(url: str) -> Dict:
     title_tag = soup.find("title")
     title = title_tag.get_text(strip=True) if title_tag else ""
     main = soup.find("main")
-    content = main.get_text(separator="\n", strip=True) if main else ""
+    if not main:
+        return {"title": title, "url": url, "content": ""}
+
+    for sel in [".breadcrumbs", "nav", ".toc-container", ".toc-wrapper", "select", ".mobile-nav-wrapper"]:
+        for el in main.select(sel):
+            el.decompose()
+    for el in main.find_all(string=lambda t: t and t.strip() in ("Copy link", "Link copied to clipboard!", "Format", "On this page")):
+        if el.parent:
+            el.parent.decompose()
+
+    content = _html_to_markdown(main)
 
     return {"title": title, "url": url, "content": content}

@@ -16,6 +16,10 @@ mcp.tool()(tools.get_case)
 mcp.tool()(tools.add_comment)
 mcp.tool()(tools.search_cve)
 mcp.tool()(tools.get_cve)
+mcp.tool()(tools.search_errata)
+mcp.tool()(tools.get_errata)
+mcp.tool()(tools.list_attachments)
+mcp.tool()(tools.get_attachment)
 
 
 def main():

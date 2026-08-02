@@ -302,6 +302,103 @@ async def test_get_cve(respx_mock):
     assert len(result["references"]) == 2
 
 
+# ── search_errata ───────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_errata(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get(f"{BASE}/hydra/rest/securitydata/csaf.json").mock(return_value=Response(200, json=[
+        {
+            "RHSA": "RHSA-2026:46885",
+            "severity": "critical",
+            "released_on": "2026-07-27",
+            "title": "Security update for MCE",
+            "CVEs": ["CVE-2026-16242"],
+        },
+    ]))
+
+    result = await tools.search_errata(severity="critical")
+    assert len(result) == 1
+    assert result[0]["advisory_id"] == "RHSA-2026:46885"
+    assert "CVE-2026-16242" in result[0]["cves"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_errata_empty(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get(f"{BASE}/hydra/rest/securitydata/csaf.json").mock(return_value=Response(200, json=[]))
+
+    result = await tools.search_errata(package="nonexistent")
+    assert result == []
+
+
+# ── get_errata ──────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_errata(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get(f"{BASE}/hydra/rest/securitydata/csaf/RHSA-2026:46885.json").mock(return_value=Response(200, json={
+        "document": {
+            "title": "Red Hat Security Advisory: MCE security update",
+            "aggregate_severity": {"text": "Critical"},
+            "tracking": {"current_release_date": "2026-07-27", "status": "final"},
+            "notes": [{"category": "description", "text": "An update for MCE"}],
+            "references": [{"url": "https://access.redhat.com/errata/RHSA-2026:46885"}],
+        },
+        "vulnerabilities": [
+            {"cve": "CVE-2026-16242"},
+            {"cve": "CVE-2025-58183"},
+        ],
+        "product_tree": {},
+    }))
+
+    result = await tools.get_errata("RHSA-2026:46885")
+    assert result["advisory_id"] == "RHSA-2026:46885"
+    assert result["severity"] == "Critical"
+    assert result["cve_count"] == 2
+    assert "CVE-2026-16242" in result["cves"]
+    assert result["description"] == "An update for MCE"
+
+
+# ── list_attachments ────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_attachments(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get("https://api.access.redhat.com/support/v1/cases/01234567/attachments").mock(return_value=Response(200, json=[
+        {"uuid": "abc-123", "fileName": "must-gather.tar.gz", "sizeKB": 5120},
+    ]))
+
+    result = await tools.list_attachments("01234567")
+    assert len(result) == 1
+    assert result[0]["uuid"] == "abc-123"
+    assert result[0]["filename"] == "must-gather.tar.gz"
+    assert result[0]["size_kb"] == 5120
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_attachment(respx_mock, tmp_path, monkeypatch):
+    _mock_token(respx_mock)
+    respx_mock.get("https://api.access.redhat.com/support/v1/cases/01234567/attachments").mock(return_value=Response(200, json=[
+        {"uuid": "abc-123", "fileName": "notes.txt", "sizeKB": 1},
+    ]))
+    respx_mock.get("https://api.access.redhat.com/support/v1/cases/01234567/attachments/abc-123").mock(return_value=Response(200, content=b"hello world"))
+
+    monkeypatch.setattr("redhat_api_mcp.tools.Path", lambda *a: tmp_path.joinpath(*[str(p).lstrip("/") for p in a]))
+
+    result = await tools.get_attachment("01234567", "abc-123")
+    assert result["filename"] == "notes.txt"
+    assert result["size_bytes"] == 11
+
+
 # ── get_doc ─────────────────────────────────────────────────────────
 
 
@@ -316,12 +413,32 @@ async def test_get_doc_invalid_url():
 async def test_get_doc(respx_mock):
     _mock_token(respx_mock)
     html = """<html><head><title>Test Doc</title></head><body>
-    <nav>sidebar</nav>
-    <main><h1>Hello</h1><p>Doc content here</p></main>
+    <nav>global nav</nav>
+    <main>
+      <div class="breadcrumbs">Home &gt; Docs</div>
+      <nav>Table of contents</nav>
+      <div class="toc-container">TOC items</div>
+      <div class="mobile-nav-wrapper">mobile</div>
+      <select><option>Multi-page</option></select>
+      <h1>Hello</h1>
+      <p>Doc content here</p>
+      <pre>$ oc get pods</pre>
+      <ul><li>Item one</li><li>Item two</li></ul>
+      <span>Copy link</span>
+      <span>Format</span>
+    </main>
     </body></html>"""
     respx_mock.get("https://docs.redhat.com/en/doc/test").mock(return_value=Response(200, text=html))
 
     result = await tools.get_doc("https://docs.redhat.com/en/doc/test")
     assert result["title"] == "Test Doc"
     assert "Doc content here" in result["content"]
-    assert "sidebar" not in result["content"]
+    assert "# Hello" in result["content"]
+    assert "```" in result["content"]
+    assert "oc get pods" in result["content"]
+    assert "- Item one" in result["content"]
+    assert "global nav" not in result["content"]
+    assert "breadcrumbs" not in result["content"]
+    assert "TOC items" not in result["content"]
+    assert "Copy link" not in result["content"]
+    assert "Multi-page" not in result["content"]

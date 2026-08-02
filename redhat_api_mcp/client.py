@@ -22,7 +22,7 @@ class RedHatAPI:
 
         self.access_token = None
         self.token_expiry = None
-        self._http = httpx.AsyncClient()
+        self._http = httpx.AsyncClient(transport=httpx.AsyncHTTPTransport(retries=2))
 
     async def close(self):
         await self._http.aclose()
@@ -70,6 +70,22 @@ class RedHatAPI:
         if "application/json" in response.headers.get("content-type", ""):
             return response.json()
         return {"content": response.text}
+
+    async def get_authenticated(self, url: str) -> dict | list:
+        """Make an authenticated GET to a full URL (not base_url-relative)."""
+        token = await self.get_access_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = await self._http.get(url, headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    async def download(self, url: str) -> bytes:
+        """Download binary content from a full URL with authentication."""
+        token = await self.get_access_token()
+        headers = {"Authorization": f"Bearer {token}"}
+        response = await self._http.get(url, headers=headers)
+        response.raise_for_status()
+        return response.content
 
     async def fetch(self, url: str) -> str:
         """Fetch a URL without authentication. Returns the response text."""

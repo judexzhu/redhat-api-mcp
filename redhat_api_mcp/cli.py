@@ -340,5 +340,70 @@ def get_doc_cmd(url, fmt):
     output(result, fmt)
 
 
+@cli.command("search-errata")
+@click.option("--advisory", default=None, help="Comma-separated advisory IDs (e.g. RHSA-2026:46885)")
+@click.option("--cve", default=None, help="Comma-separated CVE IDs")
+@click.option("--severity", default=None, help="Filter: low, moderate, important, critical")
+@click.option("--package", default=None, help="Filter by package name")
+@click.option("--after", default=None, help="Only advisories after this date (YYYY-MM-DD)")
+@click.option("--before", default=None, help="Only advisories before this date (YYYY-MM-DD)")
+@click.option("--created-days-ago", default=None, type=int, help="Only advisories created within N days")
+@click.option("--per-page", default=10, help="Number of results")
+@click.option("--page", default=1, help="Page number")
+@_output_option
+def search_errata_cmd(advisory, cve, severity, package, after, before, created_days_ago, per_page, page, fmt):
+    """Search Red Hat errata/advisories via the CSAF Security Data API.
+
+    \b
+    At least one filter is recommended.
+    """
+    result = run_async(tools.search_errata(advisory, cve, severity, package, after, before, created_days_ago, per_page, page))
+    output(result, fmt)
+
+
+@cli.command("get-errata")
+@click.argument("advisory_id")
+@_output_option
+def get_errata_cmd(advisory_id, fmt):
+    """Get detailed advisory information from Red Hat Security Data.
+
+    \b
+    ADVISORY_ID is the advisory identifier (e.g. RHSA-2026:46885).
+    Returns severity, CVEs, affected products, and references.
+    """
+    result = run_async(tools.get_errata(advisory_id))
+    output(result, fmt)
+
+
+@cli.command("list-attachments")
+@click.argument("case_number")
+@_output_option
+def list_attachments_cmd(case_number, fmt):
+    """List attachments on a support case.
+
+    \b
+    CASE_NUMBER is the 8-digit case number (e.g. 01234567).
+    Returns filename, size, creator, and UUID for each attachment.
+    """
+    result = run_async(tools.list_attachments(case_number))
+    output(result, fmt)
+
+
+@cli.command("get-attachment")
+@click.argument("case_number")
+@click.argument("attachment_uuid")
+@_output_option
+def get_attachment_cmd(case_number, attachment_uuid, fmt):
+    """Download a case attachment to /tmp.
+
+    \b
+    CASE_NUMBER is the 8-digit case number.
+    ATTACHMENT_UUID is the UUID from list-attachments.
+    Downloads to /tmp/rhapi-attachments/<case>/<filename>.
+    """
+    result = run_async(tools.get_attachment(case_number, attachment_uuid))
+    output(result, fmt)
+
+
 if __name__ == "__main__":
     cli()
