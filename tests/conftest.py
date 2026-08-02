@@ -8,7 +8,7 @@ os.environ.setdefault("RH_API_OFFLINE_TOKEN", "test-token")
 @pytest.fixture(autouse=True)
 def _reset_client():
     """Reset the global client singleton between tests."""
-    from redhat_api_mcp import tools
-    tools._client = None
+    from redhat_api_mcp.tools import set_client
+    set_client(None)
     yield
-    tools._client = None
+    set_client(None)

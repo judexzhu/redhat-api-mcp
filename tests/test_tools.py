@@ -87,6 +87,19 @@ async def test_get_kcs_teaser_fallback(respx_mock):
     assert result["title"] == "Teaser Title"
 
 
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_kcs_drupal_failure_fallback(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.post(f"{BASE}/hydra/rest/search/v2/kcs").mock(return_value=Response(200, json={
+        "response": {"docs": [{"documentKind": "Solution", "publishedTitle": "Fallback Title", "abstract": "abs"}]}
+    }))
+    respx_mock.get(f"{BASE}/hydra/rest/drupal/solutions/9001").mock(return_value=Response(500))
+
+    result = await tools.get_kcs("9001")
+    assert result["title"] == "Fallback Title"
+
+
 # ── search_docs ─────────────────────────────────────────────────────
 
 
@@ -301,6 +314,7 @@ async def test_get_doc_invalid_url():
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_doc(respx_mock):
+    _mock_token(respx_mock)
     html = """<html><head><title>Test Doc</title></head><body>
     <nav>sidebar</nav>
     <main><h1>Hello</h1><p>Doc content here</p></main>

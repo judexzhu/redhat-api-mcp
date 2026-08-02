@@ -5,13 +5,12 @@ from datetime import datetime, timedelta
 import httpx
 from dotenv import load_dotenv
 
-load_dotenv()
-
 
 class RedHatAPI:
     """Red Hat API client with authentication and request handling."""
 
     def __init__(self):
+        load_dotenv()
         self.base_url = os.getenv("RH_API_BASE_URL", "https://access.redhat.com")
         self.sso_url = os.getenv(
             "RH_SSO_URL",
@@ -49,7 +48,7 @@ class RedHatAPI:
 
         return self.access_token
 
-    async def make_request(self, method: str, path: str, data: Optional[Dict] = None, params: Optional[Dict] = None) -> Dict:
+    async def make_request(self, method: str, path: str, data: Optional[Dict] = None, params: Optional[Dict] = None) -> dict | list:
         """Make an authenticated request to the Red Hat API."""
         token = await self.get_access_token()
         headers = {
@@ -71,3 +70,9 @@ class RedHatAPI:
         if "application/json" in response.headers.get("content-type", ""):
             return response.json()
         return {"content": response.text}
+
+    async def fetch(self, url: str) -> str:
+        """Fetch a URL without authentication. Returns the response text."""
+        response = await self._http.get(url)
+        response.raise_for_status()
+        return response.text

@@ -2,7 +2,6 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict
 
-import httpx as _httpx
 from bs4 import BeautifulSoup
 
 from redhat_api_mcp.client import RedHatAPI
@@ -15,6 +14,11 @@ def get_client() -> RedHatAPI:
     if _client is None:
         _client = RedHatAPI()
     return _client
+
+
+def set_client(client: RedHatAPI | None) -> None:
+    global _client
+    _client = client
 
 
 async def search_kcs(query: str, rows: int = 50, start: int = 0) -> List[Dict]:
@@ -479,11 +483,10 @@ async def get_doc(url: str) -> Dict:
     if "docs.redhat.com" not in url:
         raise ValueError("URL must be a docs.redhat.com page")
 
-    async with _httpx.AsyncClient() as http:
-        response = await http.get(url)
-        response.raise_for_status()
+    client = get_client()
+    html = await client.fetch(url)
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    soup = BeautifulSoup(html, "html.parser")
     title_tag = soup.find("title")
     title = title_tag.get_text(strip=True) if title_tag else ""
     main = soup.find("main")
