@@ -31,6 +31,10 @@ The server exposes the following Red Hat API tools:
 7. **Add Case Comment** (`add_comment`) - Post a private comment to a support case
 8. **Search CVEs** (`search_cve`) - Search Red Hat CVEs via the Security Data API
 9. **Get CVE Details** (`get_cve`) - Get detailed CVE information including affected releases
+10. **Search Errata** (`search_errata`) - Search Red Hat advisories (RHSA/RHBA/RHEA) via CSAF API
+11. **Get Errata Details** (`get_errata`) - Get detailed advisory information including CVEs and affected products
+12. **List Case Attachments** (`list_attachments`) - List attachments on a support case
+13. **Download Attachment** (`get_attachment`) - Download a case attachment to `/tmp` for reading
 
 ## Prerequisites
 
@@ -189,6 +193,19 @@ rhapi search-cve --product openshift --package kernel
 # Get CVE details
 rhapi get-cve CVE-2026-31431
 
+# Search errata/advisories
+rhapi search-errata --severity critical --created-days-ago 7
+rhapi search-errata --cve CVE-2026-16242
+
+# Get advisory details
+rhapi get-errata RHSA-2026:46885
+
+# List case attachments
+rhapi list-attachments 01234567
+
+# Download an attachment to /tmp
+rhapi get-attachment 01234567 <uuid-from-list>
+
 # Output formats: json (default), table, or markdown
 rhapi search-cases --months 3 -o table
 rhapi get-case 01234567 -o md
@@ -346,6 +363,71 @@ get_cve(cve_id: str) -> Dict
 - `cve_id` (str): The CVE identifier (e.g., "CVE-2026-31431")
 
 **Returns:** Detailed CVE information including severity, CVSS, affected releases, fix status, mitigation, and references
+
+### search_errata
+
+Search Red Hat errata/advisories via the CSAF Security Data API.
+
+```python
+search_errata(advisory: str = None, cve: str = None, severity: str = None, package: str = None, after: str = None, before: str = None, created_days_ago: int = None, per_page: int = 10, page: int = 1) -> List[Dict]
+```
+
+**Parameters:**
+
+- `advisory` (str, optional): Comma-separated advisory IDs (e.g. "RHSA-2026:46885,RHSA-2026:47388")
+- `cve` (str, optional): Comma-separated CVE IDs to find advisories for
+- `severity` (str, optional): Filter by severity (low, moderate, important, critical)
+- `package` (str, optional): Filter by package name (e.g. "kernel")
+- `after` (str, optional): Only advisories after this date (YYYY-MM-DD)
+- `before` (str, optional): Only advisories before this date (YYYY-MM-DD)
+- `created_days_ago` (int, optional): Only advisories created within N days
+- `per_page` (int, optional): Number of results to return (default: 10)
+- `page` (int, optional): Page number for pagination (default: 1)
+
+**Returns:** List of advisories with ID, title, severity, and release date
+
+### get_errata
+
+Get detailed information about a specific Red Hat advisory (RHSA/RHBA/RHEA).
+
+```python
+get_errata(advisory_id: str) -> Dict
+```
+
+**Parameters:**
+
+- `advisory_id` (str): The advisory identifier (e.g. "RHSA-2026:46885")
+
+**Returns:** Detailed advisory information including severity, CVEs, affected products, and references
+
+### list_attachments
+
+List attachments on a Red Hat support case.
+
+```python
+list_attachments(case_number: str) -> List[Dict]
+```
+
+**Parameters:**
+
+- `case_number` (str): The Red Hat case number (e.g., "01234567")
+
+**Returns:** List of attachments with uuid, filename, and size_kb
+
+### get_attachment
+
+Download a case attachment to `/tmp` for reading.
+
+```python
+get_attachment(case_number: str, attachment_uuid: str) -> Dict
+```
+
+**Parameters:**
+
+- `case_number` (str): The Red Hat case number (e.g., "01234567")
+- `attachment_uuid` (str): The attachment UUID (from list_attachments)
+
+**Returns:** Dictionary with filename, path on disk, and size in bytes
 
 ## Claude Code Skill
 
