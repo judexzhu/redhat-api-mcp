@@ -119,6 +119,13 @@ To install the server in Claude Desktop, add this configuration to your Claude D
 
 ```bash
 claude mcp add --scope user redhat \
+  -- uv --directory /path/to/your/redhat-api-mcp run redhat_mcp_server.py
+```
+
+If you have a `.env` file in the project root (see [Configuration](#configuration)), the token is loaded automatically. Otherwise, pass it explicitly:
+
+```bash
+claude mcp add --scope user redhat \
   -e RH_API_OFFLINE_TOKEN=your_actual_offline_token_here \
   -- uv --directory /path/to/your/redhat-api-mcp run redhat_mcp_server.py
 ```
