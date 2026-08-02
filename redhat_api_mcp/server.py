@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
 """Red Hat API MCP Server — FastMCP setup, tool wrappers, and prompt templates."""
 
-from pathlib import Path
 from typing import Optional, List, Dict
 
 from mcp.server.fastmcp import FastMCP
 
 from redhat_api_mcp import tools
-
-_PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 mcp = FastMCP("RedHat API", description="Interact with Red Hat KCS and Case APIs", version="1.0.0")
 
@@ -168,31 +165,6 @@ async def get_doc(url: str) -> Dict:
         Dictionary with title and plain-text content extracted from the page
     """
     return await tools.get_doc(url)
-
-
-# ── Prompt templates ────────────────────────────────────────────────
-
-
-def _load_prompt(name: str, **kwargs: str) -> str:
-    return (_PROMPTS_DIR / f"{name}.md").read_text().format(**kwargs).strip()
-
-
-@mcp.prompt(name="summarize_case_prompt", description="Summarize a Red Hat support case in C.A.S.E. markdown format.")
-async def summarize_case_prompt(case_number: str) -> str:
-    """Given a case number, return the C.A.S.E. summary prompt."""
-    return _load_prompt("summarize_case", case_number=case_number)
-
-
-@mcp.prompt(name="resolve_case_prompt", description="Red Hat Case Resolver Agent: investigation and solution workflow for a support case.")
-async def resolve_case_prompt(case_number: str) -> str:
-    """Given a case number, return the case resolver workflow prompt."""
-    return _load_prompt("resolve_case", case_number=case_number)
-
-
-@mcp.prompt(name="resolve_case_prompt_v2", description="Red Hat Case Resolver Agent: investigation and solution workflow for a support case.")
-async def resolve_case_prompt_v2(case_number: str) -> str:
-    """Given a case number, return the v2 case resolver workflow prompt."""
-    return _load_prompt("resolve_case_v2", case_number=case_number)
 
 
 def main():
