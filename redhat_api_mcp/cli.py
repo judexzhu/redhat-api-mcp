@@ -162,6 +162,13 @@ def cli():
       -o [json|table|md] Output format (default: json)
 
     \b
+    get-doc URL [OPTIONS]
+      Fetch full content from a Red Hat documentation page.
+      URL is the full docs.redhat.com URL.
+      Returns title and plain-text content extracted from the page.
+      -o [json|table|md] Output format (default: json)
+
+    \b
     Output:
       JSON by default. Use -o table for key-value, -o md for markdown tables.
 
@@ -181,6 +188,7 @@ def cli():
       rhapi add-comment 01234567 "Investigating the issue"
       rhapi search-cve --severity critical --after 2026-01-01
       rhapi get-cve CVE-2026-31431
+      rhapi get-doc https://docs.redhat.com/en/documentation/...
 
     \b
     Tips:
@@ -315,6 +323,20 @@ def get_cve_cmd(cve_id, fmt):
     Returns severity, CVSS, affected releases, fix status, mitigation, and references.
     """
     result = run_async(tools.get_cve(cve_id))
+    output(result, fmt)
+
+
+@cli.command("get-doc")
+@click.argument("url")
+@_output_option
+def get_doc_cmd(url, fmt):
+    """Fetch full content from a Red Hat documentation page.
+
+    \b
+    URL is the full docs.redhat.com URL.
+    Returns title and plain-text content extracted from the page.
+    """
+    result = run_async(tools.get_doc(url))
     output(result, fmt)
 
 

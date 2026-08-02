@@ -2,6 +2,9 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict
 
+import httpx as _httpx
+from bs4 import BeautifulSoup
+
 from redhat_api_mcp.client import RedHatAPI
 
 _client: RedHatAPI | None = None
@@ -461,3 +464,29 @@ async def get_cve(cve_id: str) -> Dict:
         "package_state": fix_state,
         "url": f"https://access.redhat.com/security/cve/{cve_id}",
     }
+
+
+async def get_doc(url: str) -> Dict:
+    """
+    Fetch full content from a Red Hat documentation page (docs.redhat.com).
+
+    Args:
+        url: Full URL of the documentation page (e.g. "https://docs.redhat.com/en/documentation/...")
+
+    Returns:
+        Dictionary with title and plain-text content extracted from the page
+    """
+    if "docs.redhat.com" not in url:
+        raise ValueError("URL must be a docs.redhat.com page")
+
+    async with _httpx.AsyncClient() as http:
+        response = await http.get(url)
+        response.raise_for_status()
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    title_tag = soup.find("title")
+    title = title_tag.get_text(strip=True) if title_tag else ""
+    main = soup.find("main")
+    content = main.get_text(separator="\n", strip=True) if main else ""
+
+    return {"title": title, "url": url, "content": content}
