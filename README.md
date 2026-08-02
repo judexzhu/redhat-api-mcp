@@ -43,6 +43,7 @@ The server exposes the following Red Hat API tools:
 ### 1. Install UV (if not already installed)
 
 ### 2. Clone and Setup Project
+
 ```bash
 git clone <your-repository-url>
 cd redhat-api-mcp
@@ -50,6 +51,7 @@ uv sync
 ```
 
 ### 3. Install CLI globally (optional)
+
 ```bash
 uv tool install .
 ```
@@ -59,12 +61,14 @@ This makes the `rhapi` command available system-wide at `~/.local/bin/rhapi`.
 ## Configuration
 
 ### 1. Get Your Red Hat API Token
+
 1. Visit the [Red Hat API Token Management page](https://access.redhat.com/management/api) per [KCS](https://access.redhat.com/articles/3626371)
 2. Log in to your Red Hat account
 3. Generate an offline token
 4. Copy and save the token securely
 
 ### 2. Environment Setup
+
 Create a `.env` file in the project root with your Red Hat API token:
 
 ```bash
@@ -73,7 +77,6 @@ echo "RH_API_OFFLINE_TOKEN=your_offline_token_here" > .env
 ```
 
 Replace `your_offline_token_here` with your actual offline token from step 1.
-
 
 ## Usage
 
@@ -112,7 +115,22 @@ To install the server in Claude Desktop, add this configuration to your Claude D
 
 ### Integrating with Claude Code
 
-Add to your Claude Code MCP settings (`~/.claude/settings.json` or project `.mcp.json`):
+#### Option 1: CLI (recommended)
+
+```bash
+claude mcp add --scope user redhat -- \
+  uv --directory /path/to/your/redhat-api-mcp run redhat_mcp_server.py
+```
+
+Then set the environment variable in your shell profile (`.zshrc` / `.bashrc`):
+
+```bash
+export RH_API_OFFLINE_TOKEN=your_actual_offline_token_here
+```
+
+#### Option 2: Project config (`.mcp.json`)
+
+Create `.mcp.json` in your project root to share with teammates:
 
 ```json
 {
@@ -133,6 +151,7 @@ Add to your Claude Code MCP settings (`~/.claude/settings.json` or project `.mcp
 }
 ```
 
+See [Claude Code MCP docs](https://code.claude.com/docs/en/mcp-quickstart) for details on scopes and authentication.
 
 ## CLI
 
@@ -190,6 +209,7 @@ search_kcs(query: str, rows: int = 50, start: int = 0) -> List[Dict]
 ```
 
 **Parameters:**
+
 - `query` (str): Search terms (supports advanced Solr syntax)
 - `rows` (int, optional): Number of results to return (default: 50, max: 100)
 - `start` (int, optional): Starting index for pagination (default: 0)
@@ -205,6 +225,7 @@ get_kcs(solution_id: str) -> Dict
 ```
 
 **Parameters:**
+
 - `solution_id` (str): The KCS solution ID
 
 **Returns:** Dictionary with title, environment, issue, resolution, and root_cause
@@ -218,6 +239,7 @@ search_docs(query: str, rows: int = 10, start: int = 0, product: str = None) -> 
 ```
 
 **Parameters:**
+
 - `query` (str): Search terms
 - `rows` (int, optional): Number of results to return (default: 10)
 - `start` (int, optional): Starting index for pagination (default: 0)
@@ -234,6 +256,7 @@ get_doc(url: str) -> Dict
 ```
 
 **Parameters:**
+
 - `url` (str): Full URL of the docs.redhat.com page
 
 **Returns:** Dictionary with title, url, and plain-text content extracted from the page
@@ -247,6 +270,7 @@ search_cases(query: str, rows: int = 10, start: int = 0, account_number: str = N
 ```
 
 **Parameters:**
+
 - `query` (str): Search terms
 - `rows` (int, optional): Number of results to return (default: 10)
 - `start` (int, optional): Starting index for pagination (default: 0)
@@ -264,6 +288,7 @@ get_case(case_number: str) -> Dict
 ```
 
 **Parameters:**
+
 - `case_number` (str): The Red Hat case number (e.g., "01234567")
 
 **Returns:** Detailed case information with summary, description, severity, comments, external trackers, and linked resources
@@ -277,6 +302,7 @@ add_comment(case_number: str, body: str) -> Dict
 ```
 
 **Parameters:**
+
 - `case_number` (str): The Red Hat case number (e.g., "01234567")
 - `body` (str): The comment text (supports markdown)
 
@@ -291,6 +317,7 @@ search_cve(severity: str = None, product: str = None, package: str = None, advis
 ```
 
 **Parameters:**
+
 - `severity` (str, optional): Filter by severity (low, moderate, important, critical)
 - `product` (str, optional): Filter by product (e.g. "openshift")
 - `package` (str, optional): Filter by package name (e.g. "kernel", "samba")
@@ -313,10 +340,10 @@ get_cve(cve_id: str) -> Dict
 ```
 
 **Parameters:**
+
 - `cve_id` (str): The CVE identifier (e.g., "CVE-2026-31431")
 
 **Returns:** Detailed CVE information including severity, CVSS, affected releases, fix status, mitigation, and references
-
 
 ## Claude Code Skill
 
