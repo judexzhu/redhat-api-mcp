@@ -22,10 +22,15 @@ This project implements a [Model Context Protocol (MCP)](https://modelcontextpro
 
 The server exposes the following Red Hat API tools:
 
-1. **Search Red Hat KCS Solutions** - Search for knowledge base solutions
-2. **Get Solution by ID** - Retrieve full solution content
-3. **Search Red Hat Cases** - Find cases matching a query
-4. **Get Case Details** - Retrieve detailed information about a specific case
+1. **Search KCS Solutions** (`search_kcs`) - Search knowledge base solutions and articles
+2. **Get KCS Solution** (`get_kcs`) - Retrieve full solution content by ID
+3. **Search Documentation** (`search_docs`) - Search Red Hat product documentation (docs.redhat.com)
+4. **Get Documentation Page** (`get_doc`) - Fetch full content from a docs.redhat.com page
+5. **Search Cases** (`search_cases`) - Find support cases matching a query
+6. **Get Case Details** (`get_case`) - Retrieve detailed case information with comments
+7. **Add Case Comment** (`add_comment`) - Post a private comment to a support case
+8. **Search CVEs** (`search_cve`) - Search Red Hat CVEs via the Security Data API
+9. **Get CVE Details** (`get_cve`) - Get detailed CVE information including affected releases
 
 ## Prerequisites
 
@@ -105,6 +110,29 @@ To install the server in Claude Desktop, add this configuration to your Claude D
 }
 ```
 
+### Integrating with Claude Code
+
+Add to your Claude Code MCP settings (`~/.claude/settings.json` or project `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "redhat": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/path/to/your/redhat-api-mcp",
+        "run",
+        "redhat_mcp_server.py"
+      ],
+      "env": {
+        "RH_API_OFFLINE_TOKEN": "your_actual_offline_token_here"
+      }
+    }
+  }
+}
+```
+
 
 ## CLI
 
@@ -118,14 +146,31 @@ rhapi search-cases "apiserver timeout" --months 6
 # Get case details
 rhapi get-case 01234567
 
+# Add a private comment to a case
+rhapi add-comment 01234567 "Investigating the issue"
+
 # Search KCS articles
 rhapi search-kcs "OCP upgrade" --rows 10
 
 # Get a specific KCS solution
 rhapi get-kcs 1234567
 
-# Table output instead of JSON
+# Search Red Hat documentation
+rhapi search-docs "ROSA networking" --product "Red Hat OpenShift Service on AWS"
+
+# Fetch full content from a documentation page
+rhapi get-doc https://docs.redhat.com/en/documentation/...
+
+# Search CVEs
+rhapi search-cve --severity critical --after 2026-01-01
+rhapi search-cve --product openshift --package kernel
+
+# Get CVE details
+rhapi get-cve CVE-2026-31431
+
+# Output formats: json (default), table, or markdown
 rhapi search-cases --months 3 -o table
+rhapi get-case 01234567 -o md
 ```
 
 If installed locally (without `uv tool install`), prefix with `uv run`:
@@ -164,6 +209,35 @@ get_kcs(solution_id: str) -> Dict
 
 **Returns:** Dictionary with title, environment, issue, resolution, and root_cause
 
+### search_docs
+
+Search Red Hat product documentation (docs.redhat.com).
+
+```python
+search_docs(query: str, rows: int = 10, start: int = 0, product: str = None) -> List[Dict]
+```
+
+**Parameters:**
+- `query` (str): Search terms
+- `rows` (int, optional): Number of results to return (default: 10)
+- `start` (int, optional): Starting index for pagination (default: 0)
+- `product` (str, optional): Filter by product name (e.g. "Red Hat OpenShift Service on AWS")
+
+**Returns:** List of documentation pages with title, abstract, url, and last_modified
+
+### get_doc
+
+Fetch full content from a Red Hat documentation page.
+
+```python
+get_doc(url: str) -> Dict
+```
+
+**Parameters:**
+- `url` (str): Full URL of the docs.redhat.com page
+
+**Returns:** Dictionary with title, url, and plain-text content extracted from the page
+
 ### search_cases
 
 Search for Red Hat support cases.
@@ -192,7 +266,56 @@ get_case(case_number: str) -> Dict
 **Parameters:**
 - `case_number` (str): The Red Hat case number (e.g., "01234567")
 
-**Returns:** Detailed case information with summary, description, severity, and comments
+**Returns:** Detailed case information with summary, description, severity, comments, external trackers, and linked resources
+
+### add_comment
+
+Add a private comment to a Red Hat support case.
+
+```python
+add_comment(case_number: str, body: str) -> Dict
+```
+
+**Parameters:**
+- `case_number` (str): The Red Hat case number (e.g., "01234567")
+- `body` (str): The comment text (supports markdown)
+
+**Returns:** The created comment with author and timestamp. Comments are always private (never customer-visible).
+
+### search_cve
+
+Search Red Hat CVEs via the Security Data API.
+
+```python
+search_cve(severity: str = None, product: str = None, package: str = None, advisory: str = None, cvss3_score: float = None, after: str = None, before: str = None, created_days_ago: int = None, per_page: int = 10, page: int = 1) -> List[Dict]
+```
+
+**Parameters:**
+- `severity` (str, optional): Filter by severity (low, moderate, important, critical)
+- `product` (str, optional): Filter by product (e.g. "openshift")
+- `package` (str, optional): Filter by package name (e.g. "kernel", "samba")
+- `advisory` (str, optional): Filter by advisory (e.g. "RHSA-2026:13565")
+- `cvss3_score` (float, optional): Minimum CVSSv3 score (e.g. 7.0, 9.0)
+- `after` (str, optional): Only CVEs published after this date (YYYY-MM-DD)
+- `before` (str, optional): Only CVEs published before this date (YYYY-MM-DD)
+- `created_days_ago` (int, optional): Only CVEs created within N days
+- `per_page` (int, optional): Number of results to return (default: 10)
+- `page` (int, optional): Page number for pagination (default: 1)
+
+**Returns:** List of CVEs with severity, CVSS score, and advisories
+
+### get_cve
+
+Get detailed information about a specific CVE.
+
+```python
+get_cve(cve_id: str) -> Dict
+```
+
+**Parameters:**
+- `cve_id` (str): The CVE identifier (e.g., "CVE-2026-31431")
+
+**Returns:** Detailed CVE information including severity, CVSS, affected releases, fix status, mitigation, and references
 
 
 ## Claude Code Skill
@@ -215,13 +338,11 @@ cp skills/rhapi-cli/SKILL.md ~/.claude/commands/rhapi.md
 
 For detailed information about using advanced Solr query expressions with the Red Hat Hydra API, see [expression.md](./expression.md).
 
-### Prompt Templates
+### Running Tests
 
-The server includes sophisticated prompt templates for case analysis:
-
-- **Case Summary**: Generates C.A.S.E. format summaries
-- **Case Resolution**: Provides investigation workflows
-- **Multi-phase Analysis**: Advanced case resolution protocols
+```bash
+uv run pytest tests/ -v
+```
 
 ### Custom Configuration
 
