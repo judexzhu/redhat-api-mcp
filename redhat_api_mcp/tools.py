@@ -499,6 +499,10 @@ async def search_errata(
 
     Returns:
         List of advisories with ID, title, severity, and release date
+
+    Note: No product/version filter exists in this API. To find errata for a specific
+    OCP version (e.g. 4.21.25), use search_docs("OpenShift 4.21 release notes") then
+    get_doc() on the release notes page and search for the version string.
     """
     client = get_client()
     params: Dict = {"per_page": per_page, "page": page}

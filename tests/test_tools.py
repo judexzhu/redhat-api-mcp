@@ -3,6 +3,7 @@ import respx
 from httpx import Response
 
 from redhat_api_mcp import tools
+from redhat_api_mcp.client import RedHatAPI
 
 SSO_URL = "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
 BASE = "https://access.redhat.com"
@@ -442,3 +443,303 @@ async def test_get_doc(respx_mock):
     assert "TOC items" not in result["content"]
     assert "Copy link" not in result["content"]
     assert "Multi-page" not in result["content"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_doc_no_main(respx_mock):
+    _mock_token(respx_mock)
+    html = "<html><head><title>No Main</title></head><body><p>orphan</p></body></html>"
+    respx_mock.get("https://docs.redhat.com/en/doc/empty").mock(return_value=Response(200, text=html))
+
+    result = await tools.get_doc("https://docs.redhat.com/en/doc/empty")
+    assert result["title"] == "No Main"
+    assert result["content"] == ""
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_doc_tables_and_inline_code(respx_mock):
+    _mock_token(respx_mock)
+    html = """<html><head><title>Rich Doc</title></head><body>
+    <main>
+      <table><tr><th>Name</th><th>Value</th></tr><tr><td>cpu</td><td>4</td></tr></table>
+      <p>Run oc login first</p>
+      <div><section><p>Nested content</p></section></div>
+      <blockquote><p>Quoted text</p></blockquote>
+      <span>Other element text</span>
+      <script>var x=1;</script>
+      <style>.x{color:red}</style>
+    </main>
+    </body></html>"""
+    respx_mock.get("https://docs.redhat.com/en/doc/rich").mock(return_value=Response(200, text=html))
+
+    result = await tools.get_doc("https://docs.redhat.com/en/doc/rich")
+    assert "| Name | Value |" in result["content"]
+    assert "| --- | --- |" in result["content"]
+    assert "| cpu | 4 |" in result["content"]
+    assert "Run oc login first" in result["content"]
+    assert "Nested content" in result["content"]
+    assert "Quoted text" in result["content"]
+    assert "Other element text" in result["content"]
+    assert "var x=1" not in result["content"]
+
+
+# ── client coverage ────────────────────────────────────────────────
+
+
+def test_client_missing_token(monkeypatch, tmp_path):
+    monkeypatch.delenv("RH_API_OFFLINE_TOKEN", raising=False)
+    monkeypatch.delenv("RH_API_BASE_URL", raising=False)
+    monkeypatch.delenv("RH_SSO_URL", raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("redhat_api_mcp.client.load_dotenv", lambda: None)
+    with pytest.raises(ValueError, match="RH_API_OFFLINE_TOKEN"):
+        RedHatAPI()
+
+
+@pytest.mark.asyncio
+async def test_client_close(monkeypatch):
+    monkeypatch.setenv("RH_API_OFFLINE_TOKEN", "fake")
+    client = RedHatAPI()
+    await client.close()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_client_unsupported_method(respx_mock):
+    _mock_token(respx_mock)
+    client = tools.get_client()
+    with pytest.raises(ValueError, match="Unsupported method"):
+        await client.make_request("delete", "/test")
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_client_non_json_response(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get(f"{BASE}/test").mock(return_value=Response(200, text="plain text", headers={"content-type": "text/plain"}))
+
+    client = tools.get_client()
+    result = await client.make_request("get", "/test")
+    assert result == {"content": "plain text"}
+
+
+# ── get_kcs extra branches ────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_kcs_with_abstract_and_list_fields(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.post(f"{BASE}/hydra/rest/search/v2/kcs").mock(return_value=Response(200, json={
+        "response": {"docs": [{"documentKind": "Solution"}]}
+    }))
+    respx_mock.get(f"{BASE}/hydra/rest/drupal/solutions/5001").mock(return_value=Response(200, json={
+        "isTeaser": False,
+        "title": "With Abstract",
+        "environment": ["RHEL 9", "RHEL 8"],
+        "issue": {"text": "Issue text"},
+        "resolution": {"text": "Fix it"},
+        "rootCause": {"text": "Root cause"},
+        "bodyAbstract": {"text": "Abstract text"},
+    }))
+
+    result = await tools.get_kcs("5001")
+    assert result["title"] == "With Abstract"
+    assert result["abstract"] == "Abstract text"
+    assert result["environment"] == "RHEL 9"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_kcs_empty_search(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.post(f"{BASE}/hydra/rest/search/v2/kcs").mock(return_value=Response(200, json={
+        "response": {"docs": []}
+    }))
+    respx_mock.get(f"{BASE}/hydra/rest/drupal/solutions/0000").mock(return_value=Response(404))
+
+    result = await tools.get_kcs("0000")
+    assert result["title"] == ""
+    assert result["resolution"] == ""
+
+
+# ── search_docs with product filter ───────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_docs_with_product(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get(f"{BASE}/hydra/rest/search/platform/docs").mock(return_value=Response(200, json={
+        "response": {"docs": [{"allTitle": "ROSA Guide", "view_uri": "https://docs.redhat.com/rosa"}]}
+    }))
+
+    result = await tools.search_docs("ROSA", product="Red Hat OpenShift Service on AWS")
+    assert len(result) == 1
+
+
+# ── get_case with all optional fields ─────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_case_all_optional_fields(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get(f"{BASE}/hydra/rest/v1/cases/01234567").mock(return_value=Response(200, json={
+        "summary": "Full case",
+        "severity": "2",
+        "comments": [],
+        "status": "Closed",
+        "product": "OpenShift",
+        "version": "4.14",
+        "ownerId": "engineer@redhat.com",
+        "createdDate": "2026-01-01",
+        "openshiftClusterID": "abc-123",
+        "openshiftClusterVersion": "4.14.12",
+    }))
+
+    result = await tools.get_case("01234567")
+    assert result["status"] == "Closed"
+    assert result["product"] == "OpenShift"
+    assert result["version"] == "4.14"
+    assert result["ownerId"] == "engineer@redhat.com"
+    assert result["createdDate"] == "2026-01-01"
+    assert result["openshiftClusterID"] == "abc-123"
+    assert result["openshiftClusterVersion"] == "4.14.12"
+
+
+# ── search_cve with all params ────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_cve_all_params(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get(f"{BASE}/hydra/rest/securitydata/cve.json").mock(return_value=Response(200, json=[
+        {"CVE": "CVE-2026-9999", "severity": "critical"},
+    ]))
+
+    result = await tools.search_cve(
+        severity="critical", product="openshift", package="kernel",
+        advisory="RHSA-2026:0001", cvss3_score=7.0,
+        after="2026-01-01", before="2026-12-31", created_days_ago=30,
+    )
+    assert len(result) == 1
+    assert result[0]["cve"] == "CVE-2026-9999"
+
+
+# ── get_cve minimal (no affected_release, no package_state) ───────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_cve_minimal(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get(f"{BASE}/hydra/rest/securitydata/cve/CVE-2026-0002.json").mock(return_value=Response(200, json={
+        "threat_severity": "Low",
+        "public_date": "2026-06-01",
+        "affected_release": "not-a-list",
+        "package_state": "not-a-list",
+    }))
+
+    result = await tools.get_cve("CVE-2026-0002")
+    assert result["severity"] == "Low"
+    assert result["affected_releases"] == []
+    assert result["package_state"] == []
+
+
+# ── search_errata with all params ─────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_errata_all_params(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get(f"{BASE}/hydra/rest/securitydata/csaf.json").mock(return_value=Response(200, json=[
+        {"RHSA": "RHSA-2026:0001", "severity": "important"},
+    ]))
+
+    result = await tools.search_errata(
+        advisory="RHSA-2026:0001", cve="CVE-2026-0001", severity="important",
+        package="kernel", after="2026-01-01", before="2026-12-31", created_days_ago=7,
+    )
+    assert len(result) == 1
+
+
+# ── list_attachments empty ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_attachments_non_list(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get("https://api.access.redhat.com/support/v1/cases/01234567/attachments").mock(
+        return_value=Response(200, json={"error": "none"})
+    )
+
+    result = await tools.list_attachments("01234567")
+    assert result == []
+
+
+# ── get_attachment not found ───────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_attachment_not_found(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get("https://api.access.redhat.com/support/v1/cases/01234567/attachments").mock(
+        return_value=Response(200, json=[{"uuid": "other", "fileName": "x.txt", "sizeKB": 1}])
+    )
+
+    with pytest.raises(ValueError, match="not found"):
+        await tools.get_attachment("01234567", "nonexistent-uuid")
+
+
+# ── search_cve/errata dict response (non-list) ────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_cve_dict_response(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get(f"{BASE}/hydra/rest/securitydata/cve.json").mock(
+        return_value=Response(200, json={"error": "bad request"})
+    )
+
+    result = await tools.search_cve()
+    assert result == []
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_search_errata_dict_response(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get(f"{BASE}/hydra/rest/securitydata/csaf.json").mock(
+        return_value=Response(200, json={"error": "bad request"})
+    )
+
+    result = await tools.search_errata()
+    assert result == []
+
+
+# ── _html_to_markdown remaining branches ──────────────────────────
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_doc_inline_code_and_bare_text(respx_mock):
+    _mock_token(respx_mock)
+    html = """<html><head><title>Code Doc</title></head><body>
+    <main>
+      bare text node
+      <code>kubectl</code>
+    </main>
+    </body></html>"""
+    respx_mock.get("https://docs.redhat.com/en/doc/code").mock(return_value=Response(200, text=html))
+
+    result = await tools.get_doc("https://docs.redhat.com/en/doc/code")
+    assert "bare text node" in result["content"]
+    assert "`kubectl`" in result["content"]

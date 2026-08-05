@@ -169,6 +169,42 @@ def cli():
       -o [json|table|md] Output format (default: json)
 
     \b
+    search-errata [OPTIONS]
+      Search Red Hat errata/advisories via the CSAF Security Data API.
+      --advisory TEXT         Comma-separated advisory IDs
+      --cve TEXT              Comma-separated CVE IDs
+      --severity TEXT         Filter: low, moderate, important, critical
+      --package TEXT          Filter by package (e.g. "kernel", "openshift-hyperkube")
+      --after DATE            Only advisories after this date (YYYY-MM-DD)
+      --before DATE           Only advisories before this date (YYYY-MM-DD)
+      --created-days-ago INT  Only advisories created within N days
+      --per-page INT          Number of results (default: 10)
+      --page INT              Page number (default: 1)
+      -o [json|table|md]      Output format (default: json)
+
+    \b
+    get-errata ADVISORY_ID [OPTIONS]
+      Get detailed advisory information from Red Hat Security Data.
+      ADVISORY_ID is the advisory identifier (e.g. RHSA-2026:46885).
+      Returns severity, CVEs, affected products, and references.
+      -o [json|table|md] Output format (default: json)
+
+    \b
+    list-attachments CASE_NUMBER [OPTIONS]
+      List attachments on a support case.
+      CASE_NUMBER is the 8-digit case number.
+      Returns filename, size, and UUID for each attachment.
+      -o [json|table|md] Output format (default: json)
+
+    \b
+    get-attachment CASE_NUMBER ATTACHMENT_UUID [OPTIONS]
+      Download a case attachment to /tmp.
+      CASE_NUMBER is the 8-digit case number.
+      ATTACHMENT_UUID is the UUID from list-attachments.
+      Downloads to /tmp/rhapi-attachments/<case>/<filename>.
+      -o [json|table|md] Output format (default: json)
+
+    \b
     Output:
       JSON by default. Use -o table for key-value, -o md for markdown tables.
 
@@ -189,6 +225,11 @@ def cli():
       rhapi search-cve --severity critical --after 2026-01-01
       rhapi get-cve CVE-2026-31431
       rhapi get-doc https://docs.redhat.com/en/documentation/...
+      rhapi search-errata --severity critical --created-days-ago 7
+      rhapi search-errata --cve CVE-2026-16242
+      rhapi get-errata RHSA-2026:46885
+      rhapi list-attachments 01234567
+      rhapi get-attachment 01234567 <uuid-from-list>
 
     \b
     Tips:
