@@ -20,6 +20,7 @@ mcp.tool()(tools.search_errata)
 mcp.tool()(tools.get_errata)
 mcp.tool()(tools.list_attachments)
 mcp.tool()(tools.get_attachment)
+mcp.tool()(tools.list_operator_bundles)
 
 
 def main():

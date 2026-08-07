@@ -17,3 +17,5 @@ MC-Python-SDK.md
 CLAUDE.md
 
 .codegraph/
+
+.coverage

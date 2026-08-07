@@ -205,6 +205,15 @@ def cli():
       -o [json|table|md] Output format (default: json)
 
     \b
+    list-operator-bundles PACKAGE [OPTIONS]
+      List operator bundles from the Red Hat Pyxis catalog (no auth needed).
+      PACKAGE is the operator package name (e.g. openshift-pipelines-operator-rh).
+      Returns latest-in-channel by default; use --channel for all versions.
+      --ocp-version TEXT  Filter by OCP version (e.g. "4.18")
+      --channel TEXT      Show all versions in this channel (manual approval)
+      -o [json|table|md]  Output format (default: json)
+
+    \b
     Output:
       JSON by default. Use -o table for key-value, -o md for markdown tables.
 
@@ -230,6 +239,8 @@ def cli():
       rhapi get-errata RHSA-2026:46885
       rhapi list-attachments 01234567
       rhapi get-attachment 01234567 <uuid-from-list>
+      rhapi list-operator-bundles openshift-pipelines-operator-rh --ocp-version 4.19
+      rhapi list-operator-bundles cluster-logging --ocp-version 4.18 --channel stable-6.2
 
     \b
     Tips:
@@ -443,6 +454,24 @@ def get_attachment_cmd(case_number, attachment_uuid, fmt):
     Downloads to /tmp/rhapi-attachments/<case>/<filename>.
     """
     result = run_async(tools.get_attachment(case_number, attachment_uuid))
+    output(result, fmt)
+
+
+@cli.command("list-operator-bundles")
+@click.argument("package")
+@click.option("--ocp-version", default=None, help="Filter by OCP version (e.g. 4.18)")
+@click.option("--channel", default=None, help="Show all versions in this channel")
+@_output_option
+def list_operator_bundles_cmd(package, ocp_version, channel, fmt):
+    """List operator bundles from the Red Hat Pyxis catalog.
+
+    \b
+    PACKAGE is the operator package name (e.g. openshift-pipelines-operator-rh).
+    Returns latest-in-channel by default. Use --channel for all versions
+    in a specific channel (useful for manual approval subscriptions).
+    No authentication required.
+    """
+    result = run_async(tools.list_operator_bundles(package, ocp_version, channel))
     output(result, fmt)
 
 

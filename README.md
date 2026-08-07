@@ -35,6 +35,7 @@ The server exposes the following Red Hat API tools:
 11. **Get Errata Details** (`get_errata`) - Get detailed advisory information including CVEs and affected products
 12. **List Case Attachments** (`list_attachments`) - List attachments on a support case
 13. **Download Attachment** (`get_attachment`) - Download a case attachment to `/tmp` for reading
+14. **List Operator Bundles** (`list_operator_bundles`) - Check operator compatibility across OCP versions via the Pyxis catalog (no auth required)
 
 ## Prerequisites
 
@@ -205,6 +206,10 @@ rhapi list-attachments 01234567
 
 # Download an attachment to /tmp
 rhapi get-attachment 01234567 <uuid-from-list>
+
+# Check operator compatibility across OCP versions (no auth needed)
+rhapi list-operator-bundles openshift-pipelines-operator-rh --ocp-version 4.19
+rhapi list-operator-bundles cluster-logging --ocp-version 4.18 --channel stable-6.2
 
 # Output formats: json (default), table, or markdown
 rhapi search-cases --months 3 -o table
@@ -428,6 +433,22 @@ get_attachment(case_number: str, attachment_uuid: str) -> Dict
 - `attachment_uuid` (str): The attachment UUID (from list_attachments)
 
 **Returns:** Dictionary with filename, path on disk, and size in bytes
+
+### list_operator_bundles
+
+List operator bundles from the Red Hat Pyxis catalog. No authentication required.
+
+```python
+list_operator_bundles(package: str, ocp_version: str = None, channel: str = None) -> Dict
+```
+
+**Parameters:**
+
+- `package` (str): Operator package name (e.g. "openshift-pipelines-operator-rh"). Returns suggestions if not found.
+- `ocp_version` (str, optional): Filter by OCP minor version (e.g. "4.18")
+- `channel` (str, optional): Show all versions in this channel (for manual approval). Omit for latest-per-channel only.
+
+**Returns:** Dictionary with package info and bundle list (version, channel, skip_range, latest_in_channel). Returns `did_you_mean` suggestions if package name is not found.
 
 ## Claude Code Skill
 

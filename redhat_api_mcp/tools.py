@@ -1,9 +1,11 @@
+import json
 import os
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, List, Dict
 
+import httpx
 from bs4 import BeautifulSoup
 
 from redhat_api_mcp.client import RedHatAPI
@@ -643,6 +645,113 @@ async def get_attachment(case_number: str, attachment_uuid: str) -> Dict:
         "filename": filename,
         "path": str(dest),
         "size_bytes": len(content),
+    }
+
+
+_PYXIS_BASE = "https://catalog.redhat.com/api/containers/v1/operators"
+_pyxis_bundle_cache: Dict[tuple, list] = {}
+_pyxis_packages_cache: List[str] | None = None
+_pyxis_http: httpx.AsyncClient | None = None
+
+
+def _get_pyxis_http() -> httpx.AsyncClient:
+    global _pyxis_http
+    if _pyxis_http is None:
+        _pyxis_http = httpx.AsyncClient(
+            transport=httpx.AsyncHTTPTransport(retries=2),
+            timeout=30.0,
+        )
+    return _pyxis_http
+
+
+async def _pyxis_get(path: str, params: dict | None = None) -> dict:
+    """GET a Pyxis API endpoint (public, no auth)."""
+    url = f"{_PYXIS_BASE}{path}"
+    if params:
+        url += f"?{urllib.parse.urlencode(params)}"
+    http = _get_pyxis_http()
+    response = await http.get(url)
+    response.raise_for_status()
+    return response.json()
+
+
+async def _get_redhat_packages() -> List[str]:
+    """Fetch all Red Hat operator package names (cached for session)."""
+    global _pyxis_packages_cache
+    if _pyxis_packages_cache is None:
+        data = await _pyxis_get("/packages", {"filter": "source==redhat-operators", "page_size": "300"})
+        _pyxis_packages_cache = [item["package_name"] for item in data.get("data", [])]
+    return _pyxis_packages_cache
+
+
+async def list_operator_bundles(
+    package: str,
+    ocp_version: Optional[str] = None,
+    channel: Optional[str] = None,
+) -> Dict:
+    """
+    List operator bundles from the Red Hat Pyxis catalog (catalog.redhat.com).
+    No authentication required.
+
+    Use this tool to check operator compatibility across OCP versions, verify
+    architecture support, or find available operator versions for upgrade planning.
+
+    Args:
+        package: Operator package name (e.g. "openshift-pipelines-operator-rh").
+            If no bundles are found, returns suggestions from the Red Hat catalog.
+        ocp_version: Filter by OCP minor version (e.g. "4.18"). Omit for all versions.
+        channel: Filter by OLM channel (e.g. "pipelines-1.22"). When set, returns all
+            versions in that channel (useful for manual approval). When omitted, returns
+            only the latest version per channel (compact view).
+
+    Returns:
+        Dictionary with package info and bundle list. Each bundle includes version,
+        channel, ocp_version, skip_range, and latest_in_channel.
+        Returns did_you_mean suggestions if package name is not found.
+    """
+    cache_key = (package, ocp_version)
+    if cache_key not in _pyxis_bundle_cache:
+        params = {"package": package, "page_size": "200", "sort_by": "version[desc]"}
+        if ocp_version:
+            params["filter"] = f"ocp_version=={ocp_version}"
+        data = await _pyxis_get("/bundles", params)
+        _pyxis_bundle_cache[cache_key] = data.get("data", [])
+
+    raw_bundles = _pyxis_bundle_cache[cache_key]
+
+    if not raw_bundles:
+        all_pkgs = await _get_redhat_packages()
+        matches = [p for p in all_pkgs if package.lower() in p.lower()]
+        return {"error": f"No bundles found for '{package}'", "did_you_mean": matches}
+
+    formatted = [
+        {
+            "version": b.get("version", "?"),
+            "channel": b.get("channel_name", "?"),
+            "ocp_version": b.get("ocp_version", "?"),
+            "skip_range": b.get("skip_range", ""),
+            "latest_in_channel": b.get("latest_in_channel", False),
+        }
+        for b in raw_bundles
+    ]
+
+    if channel:
+        filtered = [b for b in formatted if channel.lower() in b["channel"].lower()]
+        return {
+            "package": package,
+            "ocp_version": ocp_version or "all",
+            "channel": channel,
+            "total": len(filtered),
+            "bundles": filtered,
+        }
+
+    latest = [b for b in formatted if b["latest_in_channel"]]
+    return {
+        "package": package,
+        "ocp_version": ocp_version or "all",
+        "total_in_catalog": len(formatted),
+        "channels": len(latest),
+        "bundles": latest,
     }
 
 

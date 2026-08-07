@@ -7,6 +7,7 @@ from redhat_api_mcp.client import RedHatAPI
 
 SSO_URL = "https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token"
 BASE = "https://access.redhat.com"
+PYXIS = "https://catalog.redhat.com/api/containers/v1/operators"
 
 
 def _mock_token(respx_mock):
@@ -743,3 +744,115 @@ async def test_get_doc_inline_code_and_bare_text(respx_mock):
     result = await tools.get_doc("https://docs.redhat.com/en/doc/code")
     assert "bare text node" in result["content"]
     assert "`kubectl`" in result["content"]
+
+
+# ── list_operator_bundles ────────────────────────────────────────
+
+
+PYXIS_BUNDLES = [
+    {
+        "version": "1.23.1", "channel_name": "latest", "ocp_version": "4.19",
+        "skip_range": ">=1.22.0 <1.23.1", "latest_in_channel": True,
+    },
+    {
+        "version": "1.23.1", "channel_name": "pipelines-1.23", "ocp_version": "4.19",
+        "skip_range": ">=1.22.0 <1.23.1", "latest_in_channel": True,
+    },
+    {
+        "version": "1.22.5", "channel_name": "pipelines-1.22", "ocp_version": "4.19",
+        "skip_range": ">=1.21.0 <1.22.5", "latest_in_channel": True,
+    },
+    {
+        "version": "1.22.4", "channel_name": "pipelines-1.22", "ocp_version": "4.19",
+        "skip_range": ">=1.21.0 <1.22.4", "latest_in_channel": False,
+    },
+]
+
+
+def _pyxis_bundles_response(bundles=PYXIS_BUNDLES):
+    return Response(200, json={"data": bundles, "total": len(bundles)})
+
+
+def _pyxis_packages_response():
+    return Response(200, json={
+        "data": [
+            {"package_name": "openshift-pipelines-operator-rh", "source": "redhat-operators"},
+            {"package_name": "servicemeshoperator", "source": "redhat-operators"},
+            {"package_name": "cluster-logging", "source": "redhat-operators"},
+        ],
+        "total": 3,
+    })
+
+
+@pytest.fixture(autouse=False)
+def clear_pyxis_cache():
+    """Clear Pyxis caches between tests."""
+    tools._pyxis_bundle_cache.clear()
+    tools._pyxis_packages_cache = None
+    tools._pyxis_http = None
+    yield
+    tools._pyxis_bundle_cache.clear()
+    tools._pyxis_packages_cache = None
+    tools._pyxis_http = None
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_operator_bundles_latest_default(respx_mock, clear_pyxis_cache):
+    _mock_token(respx_mock)
+    respx_mock.get(url__startswith=f"{PYXIS}/bundles").mock(return_value=_pyxis_bundles_response())
+
+    result = await tools.list_operator_bundles("openshift-pipelines-operator-rh", "4.19")
+    assert result["package"] == "openshift-pipelines-operator-rh"
+    assert result["ocp_version"] == "4.19"
+    assert result["channels"] == 3
+    assert all(b["latest_in_channel"] for b in result["bundles"])
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_operator_bundles_channel_filter(respx_mock, clear_pyxis_cache):
+    _mock_token(respx_mock)
+    respx_mock.get(url__startswith=f"{PYXIS}/bundles").mock(return_value=_pyxis_bundles_response())
+
+    result = await tools.list_operator_bundles("openshift-pipelines-operator-rh", "4.19", channel="pipelines-1.22")
+    assert result["channel"] == "pipelines-1.22"
+    assert result["total"] == 2
+    assert result["bundles"][0]["version"] == "1.22.5"
+    assert result["bundles"][1]["version"] == "1.22.4"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_operator_bundles_did_you_mean(respx_mock, clear_pyxis_cache):
+    _mock_token(respx_mock)
+    import json
+    respx_mock.get(url__startswith=f"{PYXIS}/bundles").mock(
+        return_value=Response(200, text=json.dumps({"data": [], "total": 0}))
+    )
+    respx_mock.get(url__startswith=f"{PYXIS}/packages").mock(return_value=_pyxis_packages_response())
+
+    result = await tools.list_operator_bundles("mesh")
+    assert "did_you_mean" in result
+    assert "servicemeshoperator" in result["did_you_mean"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_operator_bundles_no_ocp_version(respx_mock, clear_pyxis_cache):
+    _mock_token(respx_mock)
+    respx_mock.get(url__startswith=f"{PYXIS}/bundles").mock(return_value=_pyxis_bundles_response())
+
+    result = await tools.list_operator_bundles("openshift-pipelines-operator-rh")
+    assert result["ocp_version"] == "all"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_list_operator_bundles_cache_hit(respx_mock, clear_pyxis_cache):
+    _mock_token(respx_mock)
+    route = respx_mock.get(url__startswith=f"{PYXIS}/bundles").mock(return_value=_pyxis_bundles_response())
+
+    await tools.list_operator_bundles("openshift-pipelines-operator-rh", "4.19")
+    await tools.list_operator_bundles("openshift-pipelines-operator-rh", "4.19", channel="pipelines-1.22")
+    assert route.call_count == 1
