@@ -10,7 +10,20 @@ from bs4 import BeautifulSoup
 
 from redhat_api_mcp.client import RedHatAPI
 
+_public_http: httpx.AsyncClient | None = None
+
 _client: RedHatAPI | None = None
+
+
+def _get_public_http() -> httpx.AsyncClient:
+    """Shared unauthed httpx client for public APIs (Pyxis, docs.redhat.com)."""
+    global _public_http
+    if _public_http is None:
+        _public_http = httpx.AsyncClient(
+            transport=httpx.AsyncHTTPTransport(retries=2),
+            timeout=30.0,
+        )
+    return _public_http
 
 
 def get_client() -> RedHatAPI:
@@ -23,6 +36,9 @@ def get_client() -> RedHatAPI:
 def set_client(client: RedHatAPI | None) -> None:
     global _client
     _client = client
+
+
+# ── KCS & Docs ───────────────────────────────────────────────────
 
 
 async def search_kcs(query: str, rows: int = 50, start: int = 0) -> List[Dict]:
@@ -180,6 +196,9 @@ async def search_docs(query: str, rows: int = 10, start: int = 0, product: Optio
             })
 
     return docs
+
+
+# ── Cases ────────────────────────────────────────────────────────
 
 
 async def search_cases(
@@ -340,6 +359,9 @@ async def get_case(case_number: str) -> Dict:
         ]
 
     return formatted_result
+
+
+# ── Security Data (CVE & Errata) ─────────────────────────────────
 
 
 async def search_cve(
@@ -585,6 +607,9 @@ async def get_errata(advisory_id: str) -> Dict:
     }
 
 
+# ── Attachments ──────────────────────────────────────────────────
+
+
 _ATTACHMENTS_API = "https://api.access.redhat.com/support/v1/cases"
 
 
@@ -648,20 +673,12 @@ async def get_attachment(case_number: str, attachment_uuid: str) -> Dict:
     }
 
 
+# ── Pyxis Operator Catalog ───────────────────────────────────────
+
+
 _PYXIS_BASE = "https://catalog.redhat.com/api/containers/v1/operators"
 _pyxis_bundle_cache: Dict[tuple, list] = {}
 _pyxis_packages_cache: List[str] | None = None
-_pyxis_http: httpx.AsyncClient | None = None
-
-
-def _get_pyxis_http() -> httpx.AsyncClient:
-    global _pyxis_http
-    if _pyxis_http is None:
-        _pyxis_http = httpx.AsyncClient(
-            transport=httpx.AsyncHTTPTransport(retries=2),
-            timeout=30.0,
-        )
-    return _pyxis_http
 
 
 async def _pyxis_get(path: str, params: dict | None = None) -> dict:
@@ -669,7 +686,7 @@ async def _pyxis_get(path: str, params: dict | None = None) -> dict:
     url = f"{_PYXIS_BASE}{path}"
     if params:
         url += f"?{urllib.parse.urlencode(params)}"
-    http = _get_pyxis_http()
+    http = _get_public_http()
     response = await http.get(url)
     response.raise_for_status()
     return response.json()
@@ -755,6 +772,9 @@ async def list_operator_bundles(
     }
 
 
+# ── Documentation ────────────────────────────────────────────────
+
+
 def _html_to_markdown(element) -> str:
     """Convert an HTML element to lightweight markdown."""
     parts = []
@@ -817,8 +837,10 @@ async def get_doc(url: str) -> Dict:
     if "docs.redhat.com" not in url:
         raise ValueError("URL must be a docs.redhat.com page")
 
-    client = get_client()
-    html = await client.fetch(url)
+    http = _get_public_http()
+    response = await http.get(url)
+    response.raise_for_status()
+    html = response.text
 
     soup = BeautifulSoup(html, "html.parser")
     title_tag = soup.find("title")

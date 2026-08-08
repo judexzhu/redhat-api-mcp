@@ -413,7 +413,6 @@ async def test_get_doc_invalid_url():
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_doc(respx_mock):
-    _mock_token(respx_mock)
     html = """<html><head><title>Test Doc</title></head><body>
     <nav>global nav</nav>
     <main>
@@ -449,7 +448,6 @@ async def test_get_doc(respx_mock):
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_doc_no_main(respx_mock):
-    _mock_token(respx_mock)
     html = "<html><head><title>No Main</title></head><body><p>orphan</p></body></html>"
     respx_mock.get("https://docs.redhat.com/en/doc/empty").mock(return_value=Response(200, text=html))
 
@@ -461,7 +459,6 @@ async def test_get_doc_no_main(respx_mock):
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_doc_tables_and_inline_code(respx_mock):
-    _mock_token(respx_mock)
     html = """<html><head><title>Rich Doc</title></head><body>
     <main>
       <table><tr><th>Name</th><th>Value</th></tr><tr><td>cpu</td><td>4</td></tr></table>
@@ -732,7 +729,6 @@ async def test_search_errata_dict_response(respx_mock):
 @pytest.mark.asyncio
 @respx.mock
 async def test_get_doc_inline_code_and_bare_text(respx_mock):
-    _mock_token(respx_mock)
     html = """<html><head><title>Code Doc</title></head><body>
     <main>
       bare text node
@@ -784,21 +780,9 @@ def _pyxis_packages_response():
     })
 
 
-@pytest.fixture(autouse=False)
-def clear_pyxis_cache():
-    """Clear Pyxis caches between tests."""
-    tools._pyxis_bundle_cache.clear()
-    tools._pyxis_packages_cache = None
-    tools._pyxis_http = None
-    yield
-    tools._pyxis_bundle_cache.clear()
-    tools._pyxis_packages_cache = None
-    tools._pyxis_http = None
-
-
 @pytest.mark.asyncio
 @respx.mock
-async def test_list_operator_bundles_latest_default(respx_mock, clear_pyxis_cache):
+async def test_list_operator_bundles_latest_default(respx_mock):
     _mock_token(respx_mock)
     respx_mock.get(url__startswith=f"{PYXIS}/bundles").mock(return_value=_pyxis_bundles_response())
 
@@ -811,7 +795,7 @@ async def test_list_operator_bundles_latest_default(respx_mock, clear_pyxis_cach
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_list_operator_bundles_channel_filter(respx_mock, clear_pyxis_cache):
+async def test_list_operator_bundles_channel_filter(respx_mock):
     _mock_token(respx_mock)
     respx_mock.get(url__startswith=f"{PYXIS}/bundles").mock(return_value=_pyxis_bundles_response())
 
@@ -824,7 +808,7 @@ async def test_list_operator_bundles_channel_filter(respx_mock, clear_pyxis_cach
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_list_operator_bundles_did_you_mean(respx_mock, clear_pyxis_cache):
+async def test_list_operator_bundles_did_you_mean(respx_mock):
     _mock_token(respx_mock)
     import json
     respx_mock.get(url__startswith=f"{PYXIS}/bundles").mock(
@@ -839,7 +823,7 @@ async def test_list_operator_bundles_did_you_mean(respx_mock, clear_pyxis_cache)
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_list_operator_bundles_no_ocp_version(respx_mock, clear_pyxis_cache):
+async def test_list_operator_bundles_no_ocp_version(respx_mock):
     _mock_token(respx_mock)
     respx_mock.get(url__startswith=f"{PYXIS}/bundles").mock(return_value=_pyxis_bundles_response())
 
@@ -849,7 +833,7 @@ async def test_list_operator_bundles_no_ocp_version(respx_mock, clear_pyxis_cach
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_list_operator_bundles_cache_hit(respx_mock, clear_pyxis_cache):
+async def test_list_operator_bundles_cache_hit(respx_mock):
     _mock_token(respx_mock)
     route = respx_mock.get(url__startswith=f"{PYXIS}/bundles").mock(return_value=_pyxis_bundles_response())
 

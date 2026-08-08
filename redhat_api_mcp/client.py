@@ -86,9 +86,3 @@ class RedHatAPI:
         response = await self._http.get(url, headers=headers)
         response.raise_for_status()
         return response.content
-
-    async def fetch(self, url: str) -> str:
-        """Fetch a URL without authentication. Returns the response text."""
-        response = await self._http.get(url)
-        response.raise_for_status()
-        return response.text
