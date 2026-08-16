@@ -135,6 +135,10 @@ claude mcp add --scope user redhat \
   -- uv --directory /path/to/your/redhat-api-mcp run redhat_mcp_server.py
 ```
 
+Use `--scope project` to install at project level (`.claude/settings.json`) instead of user level.
+
+Alternatively, skip the `-e` flags and put credentials in a `.env` file inside the redhat-api-mcp directory — `load_dotenv()` picks them up automatically.
+
 #### Option 2: Project config (`.mcp.json`)
 
 Create `.mcp.json` in your project root to share with teammates:

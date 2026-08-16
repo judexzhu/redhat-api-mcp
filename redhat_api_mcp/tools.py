@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -11,6 +12,10 @@ from bs4 import BeautifulSoup
 from redhat_api_mcp.client import RedHatAPI
 
 _public_http: httpx.AsyncClient | None = None
+
+_KCS_RE = re.compile(r"access\.redhat\.com/solutions/(\d+)")
+_DOCS_RE = re.compile(r"https://docs\.redhat\.com/[^\s\)]+")
+
 
 _client: RedHatAPI | None = None
 
@@ -291,12 +296,13 @@ async def add_comment(case_number: str, body: str) -> Dict:
     }
 
 
-async def get_case(case_number: str) -> Dict:
+async def get_case(case_number: str, include_ai_comments: bool = False) -> Dict:
     """
     Get case details by case number.
 
     Args:
         case_number: The case number (e.g., "01234567")
+        include_ai_comments: Include AI-generated comments (XE AI Assistant). Filtered by default to save tokens.
 
     Returns:
         Formatted case data with description, severity, issue, case number, and comments
@@ -306,6 +312,26 @@ async def get_case(case_number: str) -> Dict:
     data = await client.make_request("get", path)
 
     comments = data.get("comments", [])
+    ai_comments = [c for c in comments if c.get("createdBy") == "XE AI Assistant"]
+    if not include_ai_comments:
+        comments = [c for c in comments if c.get("createdBy") != "XE AI Assistant"]
+
+    ai_kcs = []
+    ai_docs = []
+    if ai_comments:
+        seen_kcs = set()
+        seen_docs = set()
+        for c in ai_comments:
+            body = c.get("commentBody", "")
+            for m in _KCS_RE.finditer(body):
+                if m.group(1) not in seen_kcs:
+                    seen_kcs.add(m.group(1))
+                    ai_kcs.append(m.group(1))
+            for m in _DOCS_RE.finditer(body):
+                url = m.group(0)
+                if url not in seen_docs:
+                    seen_docs.add(url)
+                    ai_docs.append(url)
 
     formatted_result = {
         "summary": data.get("summary", data.get("title", "")),
@@ -320,6 +346,12 @@ async def get_case(case_number: str) -> Dict:
             for comment in reversed(comments)
         ],
     }
+    if not include_ai_comments and ai_comments:
+        formatted_result["filtered_ai_comments"] = len(ai_comments)
+    if ai_kcs:
+        formatted_result["ai_suggested_kcs"] = ai_kcs
+    if ai_docs:
+        formatted_result["ai_suggested_docs"] = ai_docs
 
     if "status" in data:
         formatted_result["status"] = data.get("status")

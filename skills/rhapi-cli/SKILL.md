@@ -29,6 +29,7 @@ Run `rhapi --help` for full command reference with all flags and examples.
 - Output can be piped through `jq` for analysis.
 - No product/version filter exists for errata. To find errata for a specific OCP version (e.g. 4.21.25), use `rhapi search-docs "OpenShift 4.21 release notes"` then `rhapi get-doc <url>` on the release notes page and search for the version string.
 - Comments posted via `add-comment` are always private (never customer-visible).
+- `get-case` filters XE AI Assistant comments by default (saves tokens). KCS and docs links from AI comments are extracted into `ai_suggested_kcs` and `ai_suggested_docs`. Pass `--include-ai-comments` to keep full AI comments.
 - `list-operator-bundles` queries the public Pyxis catalog (no auth). Use `--ocp-version` to check operator compatibility with a target OCP version. Use `--channel` to see all versions in a channel (for manual approval subscriptions).
 
 ## Pagination

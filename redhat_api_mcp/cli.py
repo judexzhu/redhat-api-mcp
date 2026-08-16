@@ -315,15 +315,17 @@ def search_cases_cmd(query, rows, start, account_number, created_within_months, 
 
 @cli.command("get-case")
 @click.argument("case_number")
+@click.option("--include-ai-comments", is_flag=True, default=False, help="Include XE AI Assistant comments (filtered by default)")
 @_output_option
-def get_case_cmd(case_number, fmt):
+def get_case_cmd(case_number, include_ai_comments, fmt):
     """Get case details by case number.
 
     \b
     CASE_NUMBER is the 8-digit case number (e.g. 01234567).
     Returns summary, description, severity, status, comments, and linked resources.
+    AI-generated comments (XE AI Assistant) are filtered by default to save tokens.
     """
-    result = run_async(tools.get_case(case_number))
+    result = run_async(tools.get_case(case_number, include_ai_comments=include_ai_comments))
     output(result, fmt)
 
 

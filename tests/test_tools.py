@@ -235,6 +235,47 @@ async def test_get_case_with_external_trackers(respx_mock):
     assert len(result["case_resource_links"]) == 1
 
 
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_case_filters_ai_comments(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get(f"{BASE}/hydra/rest/v1/cases/01234567").mock(return_value=Response(200, json={
+        "summary": "Console timeout",
+        "severity": "1 (Urgent)",
+        "comments": [
+            {"createdDate": "2026-08-15T22:29:00Z", "createdBy": "Zhu, Jude", "commentBody": "Checking now"},
+            {"createdDate": "2026-08-15T22:40:00Z", "createdBy": "XE AI Assistant", "commentBody": "AI noise\n[1] [KCS](https://access.redhat.com/solutions/7075708)\n[2] [KCS](https://access.redhat.com/solutions/7120659)\n[3] [Doc](https://docs.redhat.com/en/documentation/red_hat_openshift/4/html/getting_started/overview)"},
+            {"createdDate": "2026-08-15T22:41:00Z", "createdBy": "Customer", "commentBody": "Please help"},
+            {"createdDate": "2026-08-15T22:48:00Z", "createdBy": "XE AI Assistant", "commentBody": "More AI\n[1] [KCS](https://access.redhat.com/solutions/7075708)\n[2] [KCS](https://access.redhat.com/solutions/7120988)\n[3] [Doc](https://docs.redhat.com/en/documentation/red_hat_openshift/4/html/getting_started/overview)"},
+        ],
+    }))
+
+    result = await tools.get_case("01234567")
+    assert len(result["comments"]) == 2
+    assert result["filtered_ai_comments"] == 2
+    assert all(c["createdBy"] != "XE AI Assistant" for c in result["comments"])
+    assert result["ai_suggested_kcs"] == ["7075708", "7120659", "7120988"]
+    assert result["ai_suggested_docs"] == ["https://docs.redhat.com/en/documentation/red_hat_openshift/4/html/getting_started/overview"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_case_include_ai_comments(respx_mock):
+    _mock_token(respx_mock)
+    respx_mock.get(f"{BASE}/hydra/rest/v1/cases/01234567").mock(return_value=Response(200, json={
+        "summary": "Console timeout",
+        "severity": "1 (Urgent)",
+        "comments": [
+            {"createdDate": "2026-08-15T22:29:00Z", "createdBy": "Zhu, Jude", "commentBody": "Checking now"},
+            {"createdDate": "2026-08-15T22:40:00Z", "createdBy": "XE AI Assistant", "commentBody": "AI generated"},
+        ],
+    }))
+
+    result = await tools.get_case("01234567", include_ai_comments=True)
+    assert len(result["comments"]) == 2
+    assert "filtered_ai_comments" not in result
+
+
 # ── search_cve ──────────────────────────────────────────────────────
 
 
